@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>North Fargo Practice Scheduler</title>
+<style>
+  :root {
+    --bg: #f3f5f8;
+    --panel: #ffffff;
+    --line: #cfd6e0;
+    --line-soft: #e3e8ef;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --accent: #0c2340;        /* Fargo North Spartans navy */
+    --accent-2: #14305a;      /* slightly lighter navy for hovers */
+    --accent-soft: #e6eaf2;   /* pale navy tint */
+    --gold: #c8a93e;          /* Spartans gold */
+    --gold-2: #a68820;        /* deeper gold for hover/text */
+    --gold-soft: #f7eecb;     /* pale gold for highlights */
+    --danger: #c1272d;
+    --slot: 36px;             /* one 30-min slot height */
+    --gym-col: 110px;         /* one gym column width */
+    --time-col: 72px;
+    --day-gap: 12px;          /* visual separator between days */
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    display: flex;
+    overflow: hidden;
+  }
+  button {
+    font: inherit;
+    padding: 6px 12px;
+    border: 1px solid var(--accent);
+    background: white;
+    color: var(--accent);
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  button:hover { background: var(--accent-soft); }
+  button.primary { background: var(--accent); color: white; }
+  button.primary:hover { background: var(--accent-2); }
+  button.gold { background: var(--gold); color: var(--accent); border-color: var(--gold-2); font-weight: 700; }
+  button.gold:hover { background: var(--gold-2); color: white; }
+  button.tiny { padding: 2px 8px; font-size: 12px; }
+  button.danger { border-color: var(--danger); color: var(--danger); }
+  button.danger:hover { background: #fbeaea; }
+
+  /* ============== Sidebar ============== */
+  #sidebar {
+    width: 290px;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  #sidebar header {
+    padding: 14px 16px;
+    background: var(--accent);
+    border-bottom: 4px solid var(--gold);
+    color: white;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-logo {
+    width: 46px; height: 46px;
+    flex-shrink: 0;
+    background: white;
+    border-radius: 6px;
+    padding: 2px;
+    box-shadow: 0 0 0 2px var(--gold);
+  }
+  .brand-text { min-width: 0; }
+  #sidebar header h1 {
+    margin: 0;
+    font-size: 13px;
+    color: white;
+    letter-spacing: .4px;
+    line-height: 1.2;
+  }
+  #sidebar header h1 .gold-accent { color: var(--gold); }
+  #sidebar header .sub { font-size: 11px; color: var(--gold-soft); margin-top: 3px; }
+  #sidebar .scroll { overflow-y: auto; padding: 12px 16px; flex: 1; }
+  #sidebar h3 {
+    margin: 14px 0 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    color: var(--muted);
+  }
+  #sidebar h3:first-child { margin-top: 0; }
+  .group-heading {
+    margin: 12px 0 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+  }
+  .chip {
+    display: flex;
+    align-items: center;
+    padding: 6px 10px;
+    margin: 4px 0;
+    border-radius: 14px;
+    color: white;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: grab;
+    user-select: none;
+    box-shadow: 0 1px 2px rgba(0,0,0,.08);
+    position: relative;
+  }
+  .chip:active { cursor: grabbing; }
+  .chip .meta {
+    margin-left: auto;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity .12s;
+  }
+  .chip:hover .meta { opacity: 1; }
+  .chip .iconbtn {
+    width: 18px; height: 18px;
+    border-radius: 9px;
+    background: rgba(255,255,255,.25);
+    color: white;
+    border: none;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .chip .iconbtn:hover { background: rgba(255,255,255,.45); }
+  .chip.blackout {
+    background: repeating-linear-gradient(45deg, #4a4a4a, #4a4a4a 6px, #5a5a5a 6px, #5a5a5a 12px);
+  }
+  .gym-row {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    margin: 3px 0;
+    background: #eef1f5;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .gym-row .name { flex: 1; }
+  .gym-row .iconbtn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--muted);
+    padding: 2px 6px;
+    font-size: 13px;
+  }
+  .gym-row .iconbtn:hover { color: var(--accent); }
+  .add-row {
+    width: 100%;
+    margin-top: 4px;
+    background: var(--accent-soft);
+    border: 1px dashed var(--accent);
+    color: var(--accent);
+    padding: 6px;
+    font-size: 12.5px;
+  }
+  .add-row:hover { background: #d4e2f5; }
+  .empty-hint { color: var(--muted); font-size: 12px; font-style: italic; padding: 4px 0; }
+
+  /* ============== Main ============== */
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #toolbar {
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .week-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--accent-soft);
+    border-radius: 6px;
+    padding: 2px;
+  }
+  .week-nav button {
+    border: none;
+    background: transparent;
+    color: var(--accent);
+    padding: 4px 10px;
+    font-weight: 600;
+  }
+  .week-nav button:hover { background: rgba(30,74,138,.15); }
+  .week-label {
+    padding: 2px 10px;
+    font-weight: 600;
+    color: var(--accent);
+    min-width: 220px;
+    text-align: center;
+  }
+  .spacer { flex: 1; }
+
+  /* ============== Schedule grid ============== */
+  #grid-wrap {
+    flex: 1;
+    overflow: auto;
+    background: var(--bg);
+  }
+  .grid {
+    display: inline-block;
+    min-width: 100%;
+    background: var(--panel);
+    padding: 0;
+  }
+
+  /* Header has two rows: day labels (with dates), then gym labels */
+  .grid-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: white;
+    border-bottom: 2px solid var(--line);
+  }
+  .header-row {
+    display: flex;
+  }
+  .header-row .corner {
+    width: var(--time-col);
+    flex-shrink: 0;
+    background: white;
+    border-right: 2px solid var(--line);
+  }
+  .day-group {
+    display: flex;
+    flex-direction: column;
+    border-right: 2px solid var(--line);
+    flex-shrink: 0;
+  }
+  .day-group:last-child { border-right: none; }
+  .day-title {
+    text-align: center;
+    padding: 8px 6px;
+    font-weight: 700;
+    color: white;
+    background: var(--accent);
+    border-bottom: 2px solid var(--gold);
+    font-size: 13px;
+    letter-spacing: .3px;
+  }
+  .gym-headers {
+    display: flex;
+  }
+  .gym-header {
+    width: var(--gym-col);
+    flex-shrink: 0;
+    text-align: center;
+    padding: 6px 4px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--accent);
+    background: #fafbfc;
+    border-right: 1px solid var(--line-soft);
+    border-bottom: 1px solid var(--line);
+  }
+  .gym-header:last-child { border-right: none; }
+  .day-today .day-title { background: var(--gold); color: var(--accent); border-bottom-color: var(--accent); }
+  .day-today .gym-header { background: var(--gold-soft); }
+
+  /* Body */
+  .body-row { display: flex; }
+  .time-col {
+    width: var(--time-col);
+    flex-shrink: 0;
+    border-right: 2px solid var(--line);
+    background: white;
+    position: sticky;
+    left: 0;
+    z-index: 5;
+  }
+  .time-label {
+    height: var(--slot);
+    padding: 4px 8px;
+    font-size: 11.5px;
+    color: var(--muted);
+    text-align: right;
+    border-bottom: 1px solid var(--line-soft);
+    line-height: 1;
+  }
+  .day-strip {
+    display: flex;
+    border-right: 2px solid var(--line);
+    flex-shrink: 0;
+  }
+  .day-strip:last-child { border-right: none; }
+  .gym-strip {
+    width: var(--gym-col);
+    position: relative;
+    flex-shrink: 0;
+    border-right: 1px solid var(--line-soft);
+    background: white;
+  }
+  .gym-strip:last-child { border-right: none; }
+
+  /* Drop cells: visible 30-min slots with borders so users see where to drop */
+  .drop-cell {
+    height: var(--slot);
+    border-bottom: 1px solid var(--line-soft);
+    background: white;
+    transition: background-color .08s;
+  }
+  .drop-cell:nth-child(even) { background: #fafbfc; }
+  .drop-cell.drop-hover {
+    background: var(--gold-soft) !important;
+    box-shadow: inset 0 0 0 2px var(--gold);
+  }
+
+  /* Practice blocks float on top of cells */
+  .practice-block {
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    border-radius: 4px;
+    color: white;
+    padding: 3px 5px 9px;
+    font-size: 11px;
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0,0,0,.25);
+    cursor: grab;
+    overflow: hidden;
+    line-height: 1.2;
+    user-select: none;
+    z-index: 2;
+  }
+  .practice-block:active { cursor: grabbing; }
+  .practice-block.conflict {
+    box-shadow: 0 0 0 2px var(--danger), 0 1px 3px rgba(0,0,0,.25);
+  }
+  .practice-block.conflict::before {
+    content: "⚠";
+    position: absolute;
+    top: 2px;
+    right: 18px;
+    font-size: 11px;
+    opacity: .9;
+  }
+  .practice-block .pb-time {
+    font-size: 10px;
+    font-weight: 500;
+    opacity: .9;
+    margin-top: 1px;
+  }
+  .practice-block .resize {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 7px;
+    cursor: ns-resize;
+    background: rgba(255,255,255,.18);
+  }
+  .practice-block .resize:hover { background: rgba(255,255,255,.4); }
+  .practice-block .pb-del {
+    position: absolute;
+    top: 2px;
+    right: 3px;
+    width: 15px; height: 15px;
+    border-radius: 8px;
+    background: rgba(0,0,0,.3);
+    color: white;
+    border: none;
+    font-size: 10px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    display: none;
+  }
+  .practice-block:hover .pb-del { display: block; }
+  .practice-block.blackout-block {
+    background: repeating-linear-gradient(45deg, #555, #555 7px, #6a6a6a 7px, #6a6a6a 14px);
+  }
+
+  /* Tooltip while dragging */
+  body.dragging .drop-cell { cursor: copy; }
+
+  /* ============== Modal ============== */
+  .modal-back {
+    position: fixed; inset: 0;
+    background: rgba(15,23,42,.4);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 50;
+  }
+  .modal {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.25);
+    width: 440px;
+    max-width: 92vw;
+    max-height: 85vh;
+    overflow: auto;
+  }
+  .modal h2 {
+    margin: 0;
+    padding: 14px 18px;
+    font-size: 15px;
+    border-bottom: 1px solid var(--line);
+    color: var(--accent);
+  }
+  .modal .body { padding: 16px 18px; }
+  .modal .row { margin-bottom: 12px; }
+  .modal label { display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 4px; }
+  .modal input, .modal select {
+    width: 100%;
+    padding: 7px 9px;
+    font: inherit;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+  }
+  .modal .footer {
+    padding: 12px 18px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .color-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+  .swatch {
+    height: 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 2px solid transparent;
+  }
+  .swatch.selected {
+    border-color: #111;
+    box-shadow: 0 0 0 2px white inset;
+  }
+  .calendar-list .row {
+    display: flex;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--line-soft);
+    gap: 8px;
+  }
+  .swatch-mini { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+  .calendar-list .name { flex: 1; font-size: 13px; }
+  .calendar-list .count { font-size: 11px; color: var(--muted); }
+
+  /* small banner */
+  .info-banner {
+    background: #fff7e6;
+    color: #7a4f00;
+    border: 1px solid #f0d39d;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 12px 16px 0;
+    font-size: 12.5px;
+  }
+
+  /* ============== Auth + save status ============== */
+  .save-status {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 0 6px;
+  }
+  .save-status .dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #c8c8c8;
+    margin-right: 6px;
+    vertical-align: 1px;
+  }
+  .save-status.dirty .dot { background: var(--gold); }
+  .save-status.saved .dot { background: #16a34a; }
+  .save-status.error .dot { background: var(--danger); }
+  .save-status.error { color: var(--danger); }
+
+  .auth-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--accent);
+    color: white;
+    padding: 4px 4px 4px 10px;
+    border-radius: 5px;
+    font-size: 12.5px;
+  }
+  .auth-bar .who { font-weight: 600; }
+  .auth-bar .role-badge {
+    background: var(--gold);
+    color: var(--accent);
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10.5px;
+    letter-spacing: .3px;
+    text-transform: uppercase;
+  }
+  .auth-bar button {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,.4);
+    color: white;
+    padding: 3px 9px;
+    font-size: 12px;
+  }
+  .auth-bar button:hover { background: rgba(255,255,255,.15); }
+
+  /* Read-only mode: hide editing affordances */
+  body.readonly .add-row,
+  body.readonly .chip .meta,
+  body.readonly .gym-row .iconbtn,
+  body.readonly .pb-del,
+  body.readonly .practice-block .resize,
+  body.readonly #btn-save,
+  body.readonly .toolbar-edit-only {
+    display: none !important;
+  }
+  body.readonly .chip { cursor: default; }
+  body.readonly .practice-block { cursor: default; }
+  body.readonly .drop-cell:hover { cursor: default; }
+
+  /* Read-only banner across the top of grid */
+  .ro-banner {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-bottom: 1px solid var(--line);
+    padding: 8px 16px;
+    font-size: 12.5px;
+    text-align: center;
+  }
+  body:not(.readonly) .ro-banner { display: none; }
+
+  /* User management table */
+  .user-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .user-table th, .user-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--line-soft);
+    text-align: left;
+  }
+  .user-table th {
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+  }
+  .user-table .role-pill {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+  }
+  .user-table .role-pill.admin { background: var(--accent); color: white; }
+  .user-table .role-pill.editor { background: var(--gold-soft); color: var(--accent); }
+  .user-table .actions { white-space: nowrap; text-align: right; }
+
+  .form-error {
+    background: #fbeaea;
+    color: var(--danger);
+    border: 1px solid #f5c2c2;
+    border-radius: 4px;
+    padding: 7px 10px;
+    margin-bottom: 10px;
+    font-size: 12.5px;
+  }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <header>
+    <div class="brand">
+      <img class="brand-logo"
+           src="https://sybafargo.dreamhosters.com/wp-content/uploads/2026/02/SYBA-logo-150x150.png"
+           alt="SYBA logo"
+           onerror="this.style.display='none'">
+      <div class="brand-text">
+        <h1>SYBA <span class="gold-accent">NORTH FARGO</span><br>PRACTICE SCHEDULER</h1>
+        <div class="sub">Drag teams onto the grid →</div>
+      </div>
+    </div>
+  </header>
+  <div class="scroll">
+    <h3>Teams</h3>
+    <div id="team-palette"></div>
+    <button class="add-row" onclick="openTeamModal()">+ Add team</button>
+
+    <h3>Special</h3>
+    <div class="chip blackout"
+         draggable="true"
+         ondragstart="dragStartBlackout(event)"
+         ondragend="onDragEnd()">
+      ⛔ Blackout (school event)
+    </div>
+
+    <h3>Gyms</h3>
+    <div id="gym-list"></div>
+    <button class="add-row" onclick="openGymModal()">+ Add gym</button>
+  </div>
+</div>
+
+<div id="main">
+  <div id="toolbar">
+    <div class="week-nav">
+      <button onclick="shiftWeek(-1)" title="Previous week">◀</button>
+      <span class="week-label" id="week-label"></span>
+      <button onclick="shiftWeek(1)" title="Next week">▶</button>
+    </div>
+    <button onclick="goToday()">Today</button>
+    <button class="toolbar-edit-only" onclick="copyWeekToNext()" title="Duplicate this week's practices into next week">Copy week → next</button>
+    <button class="toolbar-edit-only danger" onclick="clearWeek()">Clear week</button>
+    <span class="spacer"></span>
+    <span class="save-status" id="save-status"><span class="dot"></span><span class="text">Read-only</span></span>
+    <button id="btn-save" class="primary" onclick="saveToServer()" disabled>💾 Save changes</button>
+    <button class="gold" onclick="openCalendarModal()">📅 Export team calendars</button>
+    <span id="auth-block"></span>
+  </div>
+  <div class="ro-banner">
+    🔒 You're viewing read-only. Sign in with an editor account to make changes.
+  </div>
+
+  <div id="grid-wrap">
+    <div id="grid"></div>
+  </div>
+</div>
+
+<div id="modal-host"></div>
+
+<script>
+//============================================================
+// CONFIG
+//============================================================
+const DAY_NAMES = ["Mon","Tue","Wed","Thu","Fri"];
+const START_MIN = 17 * 60;     // 5:00 PM
+const END_MIN   = 21 * 60;     // 9:00 PM
+const SLOT_MIN  = 30;
+const SLOT_PX   = 36;          // matches CSS --slot
+const DEFAULT_DUR_MIN = 90;    // 1.5 hr
+const COLORS = [
+  "#1f3a93","#c1272d","#0b6e4f","#7a3e9d","#d97706",
+  "#0e7490","#be185d","#374151","#4f46e5","#a16207",
+  "#15803d","#9a3412","#6b21a8","#0369a1","#b91c1c","#525252"
+];
+const GRADES  = ["3rd","4th","5th","6th","7th","8th"];
+const GENDERS = ["Boys","Girls"];
+const SLOT_COUNT = (END_MIN - START_MIN) / SLOT_MIN; // 8
+
+//============================================================
+// STATE
+//============================================================
+let STATE;
+let currentMonday = mondayOf(new Date());
+let nextId = 1;
+function newId(prefix){ return prefix + "_" + (nextId++) + "_" + Math.random().toString(36).slice(2,7); }
+
+function blankState() {
+  return {
+    version: 2,
+    teams: seedTeams(),
+    gyms:  seedGyms(),
+    practices: [],
+    blackouts: []
+  };
+}
+function seedTeams() {
+  return [
+    { id:"t_1", grade:"3rd", gender:"Boys",  name:"Navy",  color:"#1f3a93" },
+    { id:"t_2", grade:"3rd", gender:"Boys",  name:"Gold",  color:"#a16207" },
+    { id:"t_3", grade:"3rd", gender:"Girls", name:"Navy",  color:"#1f3a93" },
+    { id:"t_4", grade:"4th", gender:"Boys",  name:"Navy",  color:"#0369a1" },
+    { id:"t_5", grade:"4th", gender:"Girls", name:"Navy",  color:"#be185d" },
+    { id:"t_6", grade:"5th", gender:"Boys",  name:"Navy",  color:"#0b6e4f" },
+    { id:"t_7", grade:"6th", gender:"Girls", name:"Navy",  color:"#7a3e9d" },
+    { id:"t_8", grade:"7th", gender:"Boys",  name:"Varsity", color:"#374151" },
+    { id:"t_9", grade:"8th", gender:"Boys",  name:"Varsity", color:"#525252" }
+  ];
+}
+function seedGyms() {
+  return [
+    { id:"g_1", name:"Lewis & Clark"   },
+    { id:"g_2", name:"Madison"         },
+    { id:"g_3", name:"Washington"      },
+    { id:"g_4", name:"Discovery MS"    },
+    { id:"g_5", name:"Carl Ben Eielson"}
+  ];
+}
+// A few sample practices so the grid is non-empty on first open.
+// Anchored to the current week's Monday so they always show up.
+function seedSamplePractices(monday) {
+  const dk = i => dateKey(addDays(monday, i));
+  return [
+    { id:"p_s1", teamId:"t_1", gymId:"g_1", date:dk(0), startMin:17*60,    durationMin:90 },
+    { id:"p_s2", teamId:"t_2", gymId:"g_1", date:dk(0), startMin:18*60+30, durationMin:90 },
+    { id:"p_s3", teamId:"t_4", gymId:"g_2", date:dk(1), startMin:17*60,    durationMin:90 },
+    { id:"p_s4", teamId:"t_8", gymId:"g_4", date:dk(2), startMin:19*60,    durationMin:90 },
+    { id:"p_s5", teamId:"t_6", gymId:"g_3", date:dk(3), startMin:17*60+30, durationMin:90 }
+  ];
+}
+
+//============================================================
+// DATE HELPERS
+//============================================================
+function mondayOf(d) {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const wd = x.getDay();              // 0=Sun
+  const diff = (wd === 0 ? -6 : 1 - wd);
+  x.setDate(x.getDate() + diff);
+  return x;
+}
+function addDays(d, n) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+function dateKey(d) {
+  return d.getFullYear() + "-" +
+    String(d.getMonth()+1).padStart(2,"0") + "-" +
+    String(d.getDate()).padStart(2,"0");
+}
+function fmtMonthDay(d) {
+  return d.toLocaleDateString(undefined, { month:"short", day:"numeric" });
+}
+function fmtTime(min) {
+  let h = Math.floor(min/60), m = min%60;
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12  = ((h+11)%12)+1;
+  return h12 + ":" + String(m).padStart(2,"0") + " " + ampm;
+}
+function isSameDate(a, b) {
+  return a.getFullYear()===b.getFullYear() &&
+         a.getMonth()===b.getMonth() &&
+         a.getDate()===b.getDate();
+}
+
+//============================================================
+// LOOKUPS
+//============================================================
+const teamById  = id => STATE.teams.find(t => t.id === id);
+const gymById   = id => STATE.gyms.find(g => g.id === id);
+const teamLabel = t  => `${t.grade} Grade ${t.gender} ${t.name}`;
+
+//============================================================
+// INIT STATE (with sample practices for the current week)
+//============================================================
+function initialState() {
+  const s = blankState();
+  s.practices = seedSamplePractices(currentMonday);
+  return s;
+}
+
+//============================================================
+// RENDER: TEAM PALETTE
+//============================================================
+function renderPalette() {
+  const host = document.getElementById("team-palette");
+  host.innerHTML = "";
+  if (!STATE.teams.length) {
+    host.innerHTML = `<div class="empty-hint">No teams yet — add one below.</div>`;
+    return;
+  }
+  const groups = {};
+  for (const t of STATE.teams) {
+    const k = `${t.grade} Grade ${t.gender}`;
+    (groups[k] = groups[k] || []).push(t);
+  }
+  const order = [];
+  for (const g of GRADES) for (const s of GENDERS) {
+    const k = `${g} Grade ${s}`;
+    if (groups[k]) order.push(k);
+  }
+  for (const k of order) {
+    const h = document.createElement("div");
+    h.className = "group-heading";
+    h.textContent = k;
+    host.appendChild(h);
+    for (const t of groups[k]) {
+      const chip = document.createElement("div");
+      chip.className = "chip";
+      chip.style.background = t.color;
+      chip.draggable = true;
+      chip.addEventListener("dragstart", e => dragStartTeam(e, t.id));
+      chip.addEventListener("dragend", onDragEnd);
+      chip.innerHTML = `
+        <span>${escapeHtml(t.name)}</span>
+        <span class="meta">
+          <button class="iconbtn" title="Edit team" onclick="event.stopPropagation(); openTeamModal('${t.id}')">✎</button>
+          <button class="iconbtn" title="Delete team" onclick="event.stopPropagation(); deleteTeam('${t.id}')">×</button>
+        </span>`;
+      host.appendChild(chip);
+    }
+  }
+}
+
+//============================================================
+// RENDER: GYM LIST
+//============================================================
+function renderGymList() {
+  const host = document.getElementById("gym-list");
+  host.innerHTML = "";
+  if (!STATE.gyms.length) {
+    host.innerHTML = `<div class="empty-hint">No gyms yet — add one below.</div>`;
+    return;
+  }
+  for (const g of STATE.gyms) {
+    const row = document.createElement("div");
+    row.className = "gym-row";
+    row.innerHTML = `
+      <span class="name">${escapeHtml(g.name)}</span>
+      <button class="iconbtn" title="Rename" onclick="openGymModal('${g.id}')">✎</button>
+      <button class="iconbtn" title="Delete" onclick="deleteGym('${g.id}')">×</button>`;
+    host.appendChild(row);
+  }
+}
+
+//============================================================
+// RENDER: WEEK LABEL
+//============================================================
+function renderWeekLabel() {
+  const start = currentMonday;
+  const end   = addDays(start, 4);
+  document.getElementById("week-label").textContent =
+    `Week of ${fmtMonthDay(start)} – ${fmtMonthDay(end)}, ${end.getFullYear()}`;
+}
+
+//============================================================
+// RENDER: SCHEDULE GRID (full week view)
+//============================================================
+function renderSchedule() {
+  const host = document.getElementById("grid");
+  host.innerHTML = "";
+  if (!STATE.gyms.length) {
+    host.innerHTML = `<div style="padding:30px; color:var(--muted);">Add a gym in the sidebar to get started.</div>`;
+    return;
+  }
+
+  // Header
+  const headerWrap = el("div","grid-header");
+  const headerRow1 = el("div","header-row");
+  headerRow1.appendChild(el("div","corner"));
+  const today = new Date();
+  for (let d=0; d<5; d++) {
+    const date = addDays(currentMonday, d);
+    const isToday = isSameDate(date, today);
+    const dayGroup = el("div","day-group" + (isToday?" day-today":""));
+    dayGroup.style.width = (STATE.gyms.length * parseInt(getCss("--gym-col"))) + "px";
+    const title = el("div","day-title", `${DAY_NAMES[d]} · ${fmtMonthDay(date)}`);
+    dayGroup.appendChild(title);
+    const gymHeaders = el("div","gym-headers");
+    for (const g of STATE.gyms) {
+      gymHeaders.appendChild(el("div","gym-header", g.name));
+    }
+    dayGroup.appendChild(gymHeaders);
+    headerRow1.appendChild(dayGroup);
+  }
+  headerWrap.appendChild(headerRow1);
+  host.appendChild(headerWrap);
+
+  // Body
+  const bodyRow = el("div","body-row");
+
+  // Time column
+  const timeCol = el("div","time-col");
+  for (let i=0; i<SLOT_COUNT; i++) {
+    timeCol.appendChild(el("div","time-label", fmtTime(START_MIN + i*SLOT_MIN)));
+  }
+  bodyRow.appendChild(timeCol);
+
+  // Compute conflicts (per day)
+  const conflictIds = new Set();
+  for (let d=0; d<5; d++) {
+    const dk = dateKey(addDays(currentMonday, d));
+    computeConflicts(dk).forEach(id => conflictIds.add(id));
+  }
+
+  // Day strips
+  for (let d=0; d<5; d++) {
+    const date = addDays(currentMonday, d);
+    const dk   = dateKey(date);
+    const dayStrip = el("div","day-strip");
+    dayStrip.dataset.day = d;
+
+    for (const g of STATE.gyms) {
+      const gymStrip = el("div","gym-strip");
+      gymStrip.dataset.gymId = g.id;
+      gymStrip.dataset.date  = dk;
+      gymStrip.style.height = (SLOT_COUNT * SLOT_PX) + "px";
+
+      // Drop cells (one per 30-min slot)
+      for (let s=0; s<SLOT_COUNT; s++) {
+        const cell = el("div","drop-cell");
+        cell.dataset.slot = s;
+        cell.dataset.gymId = g.id;
+        cell.dataset.date  = dk;
+        cell.addEventListener("dragenter", onCellDragEnter);
+        cell.addEventListener("dragover",  onCellDragOver);
+        cell.addEventListener("dragleave", onCellDragLeave);
+        cell.addEventListener("drop",      onCellDrop);
+        gymStrip.appendChild(cell);
+      }
+
+      // Practice blocks
+      for (const p of STATE.practices) {
+        if (p.date !== dk || p.gymId !== g.id) continue;
+        gymStrip.appendChild(renderPracticeBlock(p, conflictIds.has(p.id)));
+      }
+      // Blackout blocks
+      for (const b of STATE.blackouts) {
+        if (b.date !== dk || b.gymId !== g.id) continue;
+        gymStrip.appendChild(renderBlackoutBlock(b));
+      }
+
+      dayStrip.appendChild(gymStrip);
+    }
+    bodyRow.appendChild(dayStrip);
+  }
+
+  host.appendChild(bodyRow);
+}
+
+function renderPracticeBlock(p, isConflict) {
+  const t = teamById(p.teamId);
+  const div = document.createElement("div");
+  div.className = "practice-block" + (isConflict ? " conflict" : "");
+  div.style.background = t ? t.color : "#666";
+  div.style.top    = ((p.startMin - START_MIN) / SLOT_MIN * SLOT_PX) + "px";
+  div.style.height = (p.durationMin / SLOT_MIN * SLOT_PX) + "px";
+  div.draggable = true;
+  div.dataset.practiceId = p.id;
+  div.addEventListener("dragstart", e => dragStartPractice(e, p.id));
+  div.addEventListener("dragend",   onDragEnd);
+  const name = t ? `${t.grade} ${t.gender} ${t.name}` : "(deleted team)";
+  div.innerHTML = `
+    <div>${escapeHtml(name)}</div>
+    <div class="pb-time">${fmtTime(p.startMin)}–${fmtTime(p.startMin + p.durationMin)}</div>
+    <button class="pb-del" title="Delete">×</button>
+    <div class="resize" title="Drag to resize"></div>`;
+  div.querySelector(".pb-del").addEventListener("click", e => {
+    e.stopPropagation();
+    STATE.practices = STATE.practices.filter(x => x.id !== p.id);
+    render();
+  });
+  div.querySelector(".resize").addEventListener("mousedown", e => startResize(e, p.id, null));
+  return div;
+}
+function renderBlackoutBlock(b) {
+  const div = document.createElement("div");
+  div.className = "practice-block blackout-block";
+  div.style.top    = ((b.startMin - START_MIN) / SLOT_MIN * SLOT_PX) + "px";
+  div.style.height = (b.durationMin / SLOT_MIN * SLOT_PX) + "px";
+  div.draggable = true;
+  div.dataset.blackoutId = b.id;
+  div.addEventListener("dragstart", e => dragStartBlackoutMove(e, b.id));
+  div.addEventListener("dragend",   onDragEnd);
+  div.innerHTML = `
+    <div>⛔ ${escapeHtml(b.label || "Blackout")}</div>
+    <div class="pb-time">${fmtTime(b.startMin)}–${fmtTime(b.startMin + b.durationMin)}</div>
+    <button class="pb-del" title="Delete">×</button>
+    <div class="resize" title="Drag to resize"></div>`;
+  div.querySelector(".pb-del").addEventListener("click", e => {
+    e.stopPropagation();
+    STATE.blackouts = STATE.blackouts.filter(x => x.id !== b.id);
+    render();
+  });
+  div.querySelector(".resize").addEventListener("mousedown", e => startResize(e, null, b.id));
+  return div;
+}
+
+//============================================================
+// CONFLICTS (same gym, overlapping time)
+//============================================================
+function computeConflicts(dk) {
+  const conflict = new Set();
+  const byGym = {};
+  for (const p of STATE.practices) {
+    if (p.date !== dk) continue;
+    (byGym[p.gymId] = byGym[p.gymId] || []).push(p);
+  }
+  for (const gid in byGym) {
+    const arr = byGym[gid];
+    for (let i=0; i<arr.length; i++) {
+      for (let j=i+1; j<arr.length; j++) {
+        const a = arr[i], b = arr[j];
+        const aE = a.startMin + a.durationMin;
+        const bE = b.startMin + b.durationMin;
+        if (a.startMin < bE && b.startMin < aE) {
+          conflict.add(a.id); conflict.add(b.id);
+        }
+      }
+    }
+  }
+  return conflict;
+}
+
+//============================================================
+// DRAG & DROP
+//============================================================
+function dragStartTeam(e, teamId) {
+  e.dataTransfer.setData("text/x-kind", "team");
+  e.dataTransfer.setData("text/x-team", teamId);
+  e.dataTransfer.effectAllowed = "copy";
+  document.body.classList.add("dragging");
+}
+function dragStartBlackout(e) {
+  e.dataTransfer.setData("text/x-kind", "blackout-new");
+  e.dataTransfer.effectAllowed = "copy";
+  document.body.classList.add("dragging");
+}
+function dragStartPractice(e, practiceId) {
+  e.dataTransfer.setData("text/x-kind", "practice-move");
+  e.dataTransfer.setData("text/x-pid", practiceId);
+  e.dataTransfer.effectAllowed = "move";
+  document.body.classList.add("dragging");
+}
+function dragStartBlackoutMove(e, blackoutId) {
+  e.dataTransfer.setData("text/x-kind", "blackout-move");
+  e.dataTransfer.setData("text/x-bid", blackoutId);
+  e.dataTransfer.effectAllowed = "move";
+  document.body.classList.add("dragging");
+}
+function onDragEnd() {
+  document.body.classList.remove("dragging");
+  document.querySelectorAll(".drop-cell.drop-hover")
+    .forEach(c => c.classList.remove("drop-hover"));
+}
+function onCellDragEnter(e) {
+  e.preventDefault();
+  e.currentTarget.classList.add("drop-hover");
+}
+function onCellDragOver(e) {
+  e.preventDefault();
+  e.currentTarget.classList.add("drop-hover");
+}
+function onCellDragLeave(e) {
+  e.currentTarget.classList.remove("drop-hover");
+}
+function onCellDrop(e) {
+  e.preventDefault();
+  const cell = e.currentTarget;
+  cell.classList.remove("drop-hover");
+  document.body.classList.remove("dragging");
+
+  const kind = e.dataTransfer.getData("text/x-kind");
+  if (!kind) return;
+  const slot = parseInt(cell.dataset.slot, 10);
+  const startMin = START_MIN + slot * SLOT_MIN;
+  const gymId = cell.dataset.gymId;
+  const date  = cell.dataset.date;
+
+  if (kind === "team") {
+    const teamId = e.dataTransfer.getData("text/x-team");
+    STATE.practices.push({
+      id: newId("p"), teamId, gymId, date,
+      startMin, durationMin: clampDur(DEFAULT_DUR_MIN, startMin)
+    });
+  } else if (kind === "blackout-new") {
+    const label = prompt('Blackout label (e.g. "Orchestra concert", "PTA event")', "School event");
+    if (label === null) return;
+    STATE.blackouts.push({
+      id: newId("b"), gymId, date,
+      startMin, durationMin: clampDur(DEFAULT_DUR_MIN, startMin),
+      label: label || "Blackout"
+    });
+  } else if (kind === "practice-move") {
+    const id = e.dataTransfer.getData("text/x-pid");
+    const p = STATE.practices.find(x => x.id === id);
+    if (!p) return;
+    p.gymId = gymId; p.date = date; p.startMin = startMin;
+    p.durationMin = clampDur(p.durationMin, startMin);
+  } else if (kind === "blackout-move") {
+    const id = e.dataTransfer.getData("text/x-bid");
+    const b = STATE.blackouts.find(x => x.id === id);
+    if (!b) return;
+    b.gymId = gymId; b.date = date; b.startMin = startMin;
+    b.durationMin = clampDur(b.durationMin, startMin);
+  }
+  render();
+}
+function clampDur(want, startMin) {
+  const max = END_MIN - startMin;
+  return Math.max(SLOT_MIN, Math.min(want, max));
+}
+
+//============================================================
+// RESIZE
+//============================================================
+function startResize(e, practiceId, blackoutId) {
+  e.preventDefault(); e.stopPropagation();
+  const item = practiceId
+    ? STATE.practices.find(p => p.id === practiceId)
+    : STATE.blackouts.find(b => b.id === blackoutId);
+  if (!item) return;
+  const startY = e.clientY;
+  const startDur = item.durationMin;
+  const move = ev => {
+    const dy = ev.clientY - startY;
+    const slots = Math.round(dy / SLOT_PX);
+    const next = clampDur(startDur + slots * SLOT_MIN, item.startMin);
+    if (next !== item.durationMin) {
+      item.durationMin = next;
+      render();
+    }
+  };
+  const up = () => {
+    document.removeEventListener("mousemove", move);
+    document.removeEventListener("mouseup", up);
+  };
+  document.addEventListener("mousemove", move);
+  document.addEventListener("mouseup", up);
+}
+
+//============================================================
+// WEEK ACTIONS
+//============================================================
+function shiftWeek(n) { currentMonday = addDays(currentMonday, n*7); render(); }
+function goToday() { currentMonday = mondayOf(new Date()); render(); }
+function copyWeekToNext() {
+  const startKeys = [];
+  for (let i=0;i<5;i++) startKeys.push(dateKey(addDays(currentMonday, i)));
+  const sP = STATE.practices.filter(p => startKeys.includes(p.date));
+  const sB = STATE.blackouts.filter(b => startKeys.includes(b.date));
+  if (!sP.length && !sB.length) { alert("Nothing to copy in this week."); return; }
+  for (const p of sP) {
+    const d = new Date(p.date + "T00:00:00");
+    STATE.practices.push({ ...p, id: newId("p"), date: dateKey(addDays(d, 7)) });
+  }
+  for (const b of sB) {
+    const d = new Date(b.date + "T00:00:00");
+    STATE.blackouts.push({ ...b, id: newId("b"), date: dateKey(addDays(d, 7)) });
+  }
+  shiftWeek(1);
+}
+function clearWeek() {
+  if (!confirm("Delete all practices and blackouts in this week?")) return;
+  const keys = [];
+  for (let i=0;i<5;i++) keys.push(dateKey(addDays(currentMonday, i)));
+  STATE.practices = STATE.practices.filter(p => !keys.includes(p.date));
+  STATE.blackouts = STATE.blackouts.filter(b => !keys.includes(b.date));
+  render();
+}
+
+//============================================================
+// SAVE / LOAD JSON
+//============================================================
+function saveJson() {
+  const data = JSON.stringify(STATE, null, 2);
+  const blob = new Blob([data], { type:"application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "fargo-practice-schedule_" + dateKey(new Date()) + ".json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 500);
+}
+function loadJsonFile(evt) {
+  const f = evt.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const obj = JSON.parse(r.result);
+      if (!obj || typeof obj !== "object") throw new Error("not a valid schedule file");
+      STATE = {
+        version: obj.version || 2,
+        teams: obj.teams || [],
+        gyms:  obj.gyms  || [],
+        practices: obj.practices || [],
+        blackouts: obj.blackouts || []
+      };
+      render();
+    } catch (err) { alert("Could not load file: " + err.message); }
+    evt.target.value = "";
+  };
+  r.readAsText(f);
+}
+
+//============================================================
+// ICAL EXPORT
+//============================================================
+function icsEscape(s){
+  return String(s).replace(/[\\,;]/g, m => "\\"+m).replace(/\n/g, "\\n");
+}
+function icsDateTime(date, min) {
+  const [y,mo,d] = date.split("-").map(Number);
+  const h = Math.floor(min/60), mm = min%60;
+  return `${y}${String(mo).padStart(2,"0")}${String(d).padStart(2,"0")}T` +
+         `${String(h).padStart(2,"0")}${String(mm).padStart(2,"0")}00`;
+}
+function nowUtcStamp() {
+  const n = new Date();
+  return n.getUTCFullYear() +
+    String(n.getUTCMonth()+1).padStart(2,"0") +
+    String(n.getUTCDate()).padStart(2,"0") + "T" +
+    String(n.getUTCHours()).padStart(2,"0") +
+    String(n.getUTCMinutes()).padStart(2,"0") +
+    String(n.getUTCSeconds()).padStart(2,"0") + "Z";
+}
+const VTIMEZONE_CENTRAL = [
+  "BEGIN:VTIMEZONE",
+  "TZID:America/Chicago",
+  "BEGIN:STANDARD",
+  "DTSTART:19701101T020000",
+  "TZOFFSETFROM:-0500",
+  "TZOFFSETTO:-0600",
+  "TZNAME:CST",
+  "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU",
+  "END:STANDARD",
+  "BEGIN:DAYLIGHT",
+  "DTSTART:19700308T020000",
+  "TZOFFSETFROM:-0600",
+  "TZOFFSETTO:-0500",
+  "TZNAME:CDT",
+  "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU",
+  "END:DAYLIGHT",
+  "END:VTIMEZONE"
+].join("\r\n");
+
+function buildIcsForTeam(team) {
+  const events = STATE.practices
+    .filter(p => p.teamId === team.id)
+    .sort((a,b) => (a.date+a.startMin).localeCompare(b.date+b.startMin));
+  const stamp = nowUtcStamp();
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//North Fargo Practice Scheduler//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "X-WR-CALNAME:" + icsEscape(teamLabel(team)) + " Practice",
+    "X-WR-TIMEZONE:America/Chicago",
+    VTIMEZONE_CENTRAL
+  ];
+  for (const p of events) {
+    const gym = gymById(p.gymId);
+    lines.push(
+      "BEGIN:VEVENT",
+      "UID:" + p.id + "@northfargo-practice",
+      "DTSTAMP:" + stamp,
+      "DTSTART;TZID=America/Chicago:" + icsDateTime(p.date, p.startMin),
+      "DTEND;TZID=America/Chicago:"   + icsDateTime(p.date, p.startMin + p.durationMin),
+      "SUMMARY:" + icsEscape(teamLabel(team) + " Practice"),
+      "LOCATION:" + icsEscape(gym ? gym.name : ""),
+      "DESCRIPTION:" + icsEscape("Team: " + teamLabel(team) + (gym ? "\nGym: " + gym.name : "")),
+      "END:VEVENT"
+    );
+  }
+  lines.push("END:VCALENDAR");
+  return lines.join("\r\n");
+}
+function downloadIcs(team) {
+  const data = buildIcsForTeam(team);
+  const blob = new Blob([data], { type:"text/calendar;charset=utf-8" });
+  const url  = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = teamLabel(team).replace(/[^a-z0-9]+/gi,"_") + ".ics";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 500);
+}
+function downloadAllIcs() { for (const t of STATE.teams) downloadIcs(t); }
+
+//============================================================
+// MODALS
+//============================================================
+function closeModal(){ document.getElementById("modal-host").innerHTML = ""; }
+function showModal(html){
+  document.getElementById("modal-host").innerHTML =
+    `<div class="modal-back" onclick="if(event.target===this) closeModal()">${html}</div>`;
+}
+function openTeamModal(teamId) {
+  const t = teamId ? teamById(teamId) : null;
+  const grade  = t ? t.grade  : "3rd";
+  const gender = t ? t.gender : "Boys";
+  const name   = t ? t.name   : "";
+  const color  = t ? t.color  : COLORS[0];
+  const gradeOpts  = GRADES.map(g => `<option ${g===grade?"selected":""}>${g}</option>`).join("");
+  const genderOpts = GENDERS.map(g => `<option ${g===gender?"selected":""}>${g}</option>`).join("");
+  const swatches = COLORS.map(c =>
+    `<div class="swatch ${c===color?"selected":""}" data-color="${c}" style="background:${c}" onclick="selectSwatch(this)"></div>`).join("");
+  showModal(`
+    <div class="modal">
+      <h2>${t ? "Edit team" : "Add team"}</h2>
+      <div class="body">
+        <div class="row"><label>Grade</label><select id="tm-grade">${gradeOpts}</select></div>
+        <div class="row"><label>Gender</label><select id="tm-gender">${genderOpts}</select></div>
+        <div class="row"><label>Team name (e.g. Navy, Gold, Varsity)</label>
+          <input id="tm-name" value="${escapeAttr(name)}" placeholder="Navy"></div>
+        <div class="row"><label>Color</label>
+          <div class="color-grid" id="tm-colors">${swatches}</div></div>
+      </div>
+      <div class="footer">
+        <button onclick="closeModal()">Cancel</button>
+        <button class="primary" onclick="saveTeam('${teamId||""}')">${t ? "Save" : "Add team"}</button>
+      </div>
+    </div>`);
+  setTimeout(()=>document.getElementById("tm-name").focus(), 30);
+}
+function selectSwatch(el) {
+  el.parentElement.querySelectorAll(".swatch").forEach(s => s.classList.remove("selected"));
+  el.classList.add("selected");
+}
+function saveTeam(teamId) {
+  const grade  = document.getElementById("tm-grade").value;
+  const gender = document.getElementById("tm-gender").value;
+  const name   = document.getElementById("tm-name").value.trim();
+  const colorEl= document.querySelector("#tm-colors .swatch.selected");
+  const color  = colorEl ? colorEl.dataset.color : COLORS[0];
+  if (!name) { alert("Team name is required."); return; }
+  if (teamId) Object.assign(teamById(teamId), { grade, gender, name, color });
+  else STATE.teams.push({ id: newId("t"), grade, gender, name, color });
+  closeModal(); render();
+}
+function deleteTeam(teamId) {
+  const t = teamById(teamId); if (!t) return;
+  const used = STATE.practices.filter(p => p.teamId === teamId).length;
+  const msg = used
+    ? `Delete ${teamLabel(t)}? Their ${used} practices on the schedule will also be removed.`
+    : `Delete ${teamLabel(t)}?`;
+  if (!confirm(msg)) return;
+  STATE.teams = STATE.teams.filter(x => x.id !== teamId);
+  STATE.practices = STATE.practices.filter(p => p.teamId !== teamId);
+  render();
+}
+function openGymModal(gymId) {
+  const g = gymId ? gymById(gymId) : null;
+  showModal(`
+    <div class="modal">
+      <h2>${g ? "Rename gym" : "Add gym"}</h2>
+      <div class="body">
+        <div class="row"><label>Gym name</label>
+          <input id="gm-name" value="${escapeAttr(g?g.name:"")}" placeholder="Lewis &amp; Clark"></div>
+      </div>
+      <div class="footer">
+        <button onclick="closeModal()">Cancel</button>
+        <button class="primary" onclick="saveGym('${gymId||""}')">${g ? "Save" : "Add gym"}</button>
+      </div>
+    </div>`);
+  setTimeout(()=> document.getElementById("gm-name").focus(), 30);
+}
+function saveGym(gymId) {
+  const name = document.getElementById("gm-name").value.trim();
+  if (!name) { alert("Gym name is required."); return; }
+  if (gymId) gymById(gymId).name = name;
+  else STATE.gyms.push({ id: newId("g"), name });
+  closeModal(); render();
+}
+function deleteGym(gymId) {
+  const g = gymById(gymId); if (!g) return;
+  const usedP = STATE.practices.filter(p => p.gymId === gymId).length;
+  const usedB = STATE.blackouts.filter(b => b.gymId === gymId).length;
+  const msg = (usedP+usedB)
+    ? `Delete ${g.name}? ${usedP} practices and ${usedB} blackouts in this gym will also be removed.`
+    : `Delete ${g.name}?`;
+  if (!confirm(msg)) return;
+  STATE.gyms      = STATE.gyms.filter(x => x.id !== gymId);
+  STATE.practices = STATE.practices.filter(p => p.gymId !== gymId);
+  STATE.blackouts = STATE.blackouts.filter(b => b.gymId !== gymId);
+  render();
+}
+function openCalendarModal() {
+  const rows = STATE.teams.map(t => {
+    const n = STATE.practices.filter(p => p.teamId === t.id).length;
+    return `
+      <div class="row">
+        <span class="swatch-mini" style="background:${t.color}"></span>
+        <span class="name">${escapeHtml(teamLabel(t))}</span>
+        <span class="count">${n} practice${n===1?"":"s"}</span>
+        <button class="tiny" onclick="downloadIcs(teamById('${t.id}'))" ${n?'':'disabled'}>Download .ics</button>
+      </div>`;
+  }).join("");
+  showModal(`
+    <div class="modal" style="width:540px">
+      <h2>Export team calendars</h2>
+      <div class="body">
+        <p style="margin:0 0 10px; font-size:13px; color:#374151;">
+          Each team gets its own <b>.ics</b> file with every practice on the schedule.
+          Parents can import the file or, with hosting, subscribe to a live URL that auto-refreshes.
+        </p>
+        <div class="calendar-list">${rows || '<div class="empty-hint">No teams yet.</div>'}</div>
+        <div style="margin-top:12px;">
+          <button class="primary" onclick="downloadAllIcs()">Download all team calendars</button>
+        </div>
+        <details style="margin-top:14px; font-size:12.5px; color:#374151;">
+          <summary style="cursor:pointer; font-weight:600;">How to make these subscribable (auto-update)</summary>
+          <div style="margin-top:8px; line-height:1.45;">
+            <ol style="padding-left:20px;">
+              <li>Pick a public host: Google Drive (link sharing on), Dropbox public link, GitHub Pages, or your league site.</li>
+              <li>Upload each <code>.ics</code> with a stable filename (e.g. <code>3rd-boys-navy.ics</code>).</li>
+              <li>Get the direct file link (must end in <code>.ics</code>).</li>
+              <li>Share with parents as a subscription URL, e.g. <code>webcal://yoursite.com/3rd-boys-navy.ics</code>.<br>
+                  Google Calendar: <i>Other calendars → Add → From URL</i>. Apple Calendar: <i>File → New Calendar Subscription</i>.</li>
+              <li>Re-export and overwrite the file at the same URL when you change the schedule — calendars refresh automatically.</li>
+            </ol>
+          </div>
+        </details>
+      </div>
+      <div class="footer"><button onclick="closeModal()">Close</button></div>
+    </div>`);
+}
+
+//============================================================
+// MASTER RENDER
+//============================================================
+function render() {
+  renderPalette();
+  renderGymList();
+  renderWeekLabel();
+  renderSchedule();
+}
+
+//============================================================
+// HELPERS
+//============================================================
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({
+  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+}[c])); }
+function escapeAttr(s){ return escapeHtml(s); }
+function getCss(varName){
+  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+}
+
+//============================================================
+// BOOT
+//============================================================
+STATE = initialState();
+render();
+</script>
+</body>
+</html>

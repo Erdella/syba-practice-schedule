@@ -1,0 +1,30 @@
+# SYBA North Fargo Practice Scheduler
+# PocketBase backend + the static HTML editor.
+#
+# First launch:
+#   1. docker compose up -d --build
+#   2. Open http://<host-ip>:8090/_/  to create the admin account
+#   3. (Migrations auto-run and create the 'schedules' collection)
+#   4. In the admin UI, open the Users collection and add editor accounts
+#   5. Open http://<host-ip>:8090/  to use the app
+#
+# Updates after the first launch:
+#   git pull && docker compose up -d --build
+# (The schedule data and user accounts persist in the pb_data volume.)
+
+services:
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: syba/practice-scheduler:latest
+    container_name: syba-practice-scheduler
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      # SQLite DB and PB internals — DO NOT delete to avoid wiping accounts/schedule
+      - ./pb_data:/pb_data
+      # Bind-mount the HTML so quick UI tweaks don't require rebuild
+      - ./pb_public:/pb/pb_public:ro
+      - ./pb_migrations:/pb/pb_migrations:ro
