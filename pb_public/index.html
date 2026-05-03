@@ -566,7 +566,7 @@
 //============================================================
 // CONFIG
 //============================================================
-const APP_VERSION = "0.3.1";
+const APP_VERSION = "0.3.2";
 console.log("[scheduler] app version", APP_VERSION);
 const DEBUG_SYNC = true;  // toggle off later
 const DAY_NAMES = ["Mon","Tue","Wed","Thu","Fri"];
@@ -742,6 +742,11 @@ async function saveNow() {
   }
   SAVE.timer = null;
   SAVE.saving = true;
+  // Clear dirty NOW. If a mutation lands during the save, markDirty() will
+  // set it back to true and we'll know to flush again afterward. Without
+  // this, the dirty flag from the mutation that *triggered* this save
+  // remains set, and the post-save check loops forever.
+  SAVE.dirty = false;
   setSaveStatus("saving");
   const prevVersion = META.version || 0;
   const newVersion  = prevVersion + 1;
@@ -762,16 +767,15 @@ async function saveNow() {
     SAVE.saving = false;
     SAVE.lastSyncedAt = new Date();
     if (SAVE.dirty) {
-      // Another mutation came in while saving — flush again
-      SAVE.dirty = false;
+      // A mutation arrived while we were saving — flush it (will debounce).
       markDirty();
     } else {
-      SAVE.dirty = false;
       setSaveStatus("saved");
     }
   } catch (err) {
-    META.version = prevVersion; // rollback so next attempt retries cleanly
+    META.version = prevVersion;   // rollback
     SAVE.saving = false;
+    SAVE.dirty = true;            // unsaved changes still pending
     SAVE.error = err.message || String(err);
     setSaveStatus("error");
     console.error("save failed:", err);
