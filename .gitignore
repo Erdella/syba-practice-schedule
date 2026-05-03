@@ -1,0 +1,17 @@
+# PocketBase runtime data (SQLite DB, uploaded files, internal state).
+# This is the live database — DO NOT commit, but DO back up separately.
+pb_data/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*~
+
+# Runtime logs
+*.log
+update.log

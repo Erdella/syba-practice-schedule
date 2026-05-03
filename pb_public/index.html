@@ -642,14 +642,17 @@
 //============================================================
 // CONFIG
 //============================================================
-const APP_VERSION = "0.3.3";
+const APP_VERSION = "0.3.4";
 console.log("[scheduler] app version", APP_VERSION);
 const DEBUG_SYNC = true;  // toggle off later
 const DAY_NAMES = ["Mon","Tue","Wed","Thu","Fri"];
 const START_MIN = 17 * 60;     // 5:00 PM
 const END_MIN   = 21 * 60;     // 9:00 PM
-const SLOT_MIN  = 30;
+const SLOT_MIN  = 30;          // visual cell height (one row of the grid)
+const SNAP_MIN  = 5;           // start/end snap granularity inside a cell
+const MIN_DUR_MIN = 15;        // minimum practice duration via resize
 const SLOT_PX   = 36;          // matches CSS --slot
+const PX_PER_MIN = SLOT_PX / SLOT_MIN;  // 1.2 px per minute
 const DEFAULT_DUR_MIN = 90;    // 1.5 hr
 const SLOT_COUNT = (END_MIN - START_MIN) / SLOT_MIN;
 const COLORS = [
@@ -1267,6 +1270,20 @@ function onDragEnd() {
 function onCellDragEnter(e) { e.preventDefault(); e.currentTarget.classList.add("drop-hover"); }
 function onCellDragOver(e)  { e.preventDefault(); e.currentTarget.classList.add("drop-hover"); }
 function onCellDragLeave(e) { e.currentTarget.classList.remove("drop-hover"); }
+// Map a drop event on a cell to a start time, snapped to SNAP_MIN.
+// The cell tells us which 30-min bucket; mouse-Y tells us where inside it.
+function dropMinFromEvent(cell, e) {
+  const rect = cell.getBoundingClientRect();
+  const yInCell = Math.max(0, Math.min(SLOT_PX, e.clientY - rect.top));
+  const cellSlot = parseInt(cell.dataset.slot, 10);
+  const cellStart = START_MIN + cellSlot * SLOT_MIN;
+  const offset = Math.round((yInCell / PX_PER_MIN) / SNAP_MIN) * SNAP_MIN;
+  let startMin = cellStart + offset;
+  // Don't allow drops so late there's no room for any practice
+  startMin = Math.min(startMin, END_MIN - MIN_DUR_MIN);
+  return Math.max(startMin, START_MIN);
+}
+
 function onCellDrop(e) {
   e.preventDefault();
   const cell = e.currentTarget;
@@ -1276,8 +1293,7 @@ function onCellDrop(e) {
 
   const kind = e.dataTransfer.getData("text/x-kind");
   if (!kind) return;
-  const slot = parseInt(cell.dataset.slot, 10);
-  const startMin = START_MIN + slot * SLOT_MIN;
+  const startMin = dropMinFromEvent(cell, e);
   const gymId = cell.dataset.gymId;
   const date  = cell.dataset.date;
 
@@ -1319,7 +1335,8 @@ function onCellDrop(e) {
 }
 function clampDur(want, startMin) {
   const max = END_MIN - startMin;
-  return Math.max(SLOT_MIN, Math.min(want, max));
+  if (max < MIN_DUR_MIN) return Math.max(SNAP_MIN, max);  // edge of day
+  return Math.max(MIN_DUR_MIN, Math.min(want, max));
 }
 
 //============================================================
@@ -1334,11 +1351,11 @@ function startResize(e, practiceId, blackoutId) {
   if (!item) return;
   const startY = e.clientY;
   const startDur = item.durationMin;
-  let lastDur = startDur;
   const move = ev => {
     const dy = ev.clientY - startY;
-    const slots = Math.round(dy / SLOT_PX);
-    const next = clampDur(startDur + slots * SLOT_MIN, item.startMin);
+    // Snap the cumulative drag delta to SNAP_MIN (5-min) increments
+    const dyMin = Math.round((dy / PX_PER_MIN) / SNAP_MIN) * SNAP_MIN;
+    const next = clampDur(startDur + dyMin, item.startMin);
     if (next !== item.durationMin) {
       item.durationMin = next;
       render();
