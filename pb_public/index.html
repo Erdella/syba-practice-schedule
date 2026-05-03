@@ -424,6 +424,81 @@
   }
   body.dragging .drop-cell { cursor: copy; }
 
+  /* ============== Team summary (bottom of page) ============== */
+  #team-summary {
+    background: var(--panel);
+    border-top: 3px solid var(--gold);
+    padding: 10px 16px 14px;
+    max-height: 32vh;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  #team-summary .summary-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+  #team-summary .summary-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    color: var(--accent);
+    font-weight: 700;
+  }
+  #team-summary .summary-week {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  #team-summary .summary-totals {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  #team-summary .summary-totals b { color: var(--accent); }
+  .summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+  }
+  .summary-table th {
+    text-align: left;
+    font-weight: 600;
+    color: #374151;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--line);
+    background: #fafbfc;
+    position: sticky;
+    top: 0;
+  }
+  .summary-table td {
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .summary-table tbody tr:hover { background: #fafbfc; }
+  .summary-table .team-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .summary-table .swatch-mini { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .summary-table .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    width: 1%;
+    white-space: nowrap;
+  }
+  .summary-table .none { color: var(--muted); }
+  .summary-table .group-row td {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 11px;
+    padding: 4px 8px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+
   /* ============== Modal ============== */
   .modal-back {
     position: fixed; inset: 0;
@@ -558,6 +633,7 @@
   <div id="grid-wrap">
     <div id="grid"></div>
   </div>
+  <div id="team-summary"></div>
 </div>
 
 <div id="modal-host"></div>
@@ -566,7 +642,7 @@
 //============================================================
 // CONFIG
 //============================================================
-const APP_VERSION = "0.3.2";
+const APP_VERSION = "0.3.3";
 console.log("[scheduler] app version", APP_VERSION);
 const DEBUG_SYNC = true;  // toggle off later
 const DAY_NAMES = ["Mon","Tue","Wed","Thu","Fri"];
@@ -1547,6 +1623,87 @@ function openCalendarModal() {
 }
 
 //============================================================
+// RENDER: TEAM SUMMARY (bottom panel)
+//============================================================
+function renderTeamSummary() {
+  const host = document.getElementById("team-summary");
+  if (!host) return;
+  if (!STATE.teams.length) { host.innerHTML = ""; return; }
+
+  // Practices on this calendar week (Mon..Fri)
+  const weekKeys = [];
+  for (let i=0; i<5; i++) weekKeys.push(dateKey(addDays(currentMonday, i)));
+
+  // Per-team stats for this week
+  const stats = STATE.teams.map(t => {
+    const tp = STATE.practices.filter(p => p.teamId === t.id && weekKeys.includes(p.date));
+    const totalMin = tp.reduce((s, p) => s + (p.durationMin || 0), 0);
+    return { team: t, count: tp.length, totalMin };
+  });
+
+  // Group by Grade/Gender in palette order so the table mirrors the sidebar
+  const groups = {};
+  for (const s of stats) {
+    const k = `${s.team.grade} Grade ${s.team.gender}`;
+    (groups[k] = groups[k] || []).push(s);
+  }
+  const groupOrder = [];
+  for (const g of GRADES) for (const sx of GENDERS) {
+    const k = `${g} Grade ${sx}`;
+    if (groups[k]) groupOrder.push({ name: k, items: groups[k] });
+  }
+
+  // Totals across all teams this week
+  const totalPractices = stats.reduce((s, x) => s + x.count, 0);
+  const totalMin       = stats.reduce((s, x) => s + x.totalMin, 0);
+  const totalHours     = (totalMin / 60).toFixed(1);
+  const teamsScheduled = stats.filter(x => x.count > 0).length;
+  const teamsUnscheduled = stats.length - teamsScheduled;
+
+  let rows = "";
+  for (const grp of groupOrder) {
+    rows += `<tr class="group-row"><td colspan="3">${escapeHtml(grp.name)}</td></tr>`;
+    for (const s of grp.items) {
+      const hours = (s.totalMin / 60).toFixed(1);
+      const isEmpty = s.count === 0;
+      rows += `<tr>
+        <td><div class="team-cell">
+          <span class="swatch-mini" style="background:${s.team.color}"></span>
+          ${escapeHtml(s.team.name)}
+        </div></td>
+        <td class="num ${isEmpty?'none':''}">${isEmpty ? "—" : s.count}</td>
+        <td class="num ${isEmpty?'none':''}">${isEmpty ? "—" : hours + " h"}</td>
+      </tr>`;
+    }
+  }
+
+  const weekRange = `${fmtMonthDay(currentMonday)} – ${fmtMonthDay(addDays(currentMonday, 4))}`;
+  const unschedNote = teamsUnscheduled > 0
+    ? ` · <span style="color:var(--danger);">${teamsUnscheduled} team${teamsUnscheduled===1?"":"s"} not scheduled</span>`
+    : "";
+
+  host.innerHTML = `
+    <div class="summary-head">
+      <span class="summary-title">Practices this week</span>
+      <span class="summary-week">${weekRange}</span>
+      <span class="summary-totals">
+        <b>${totalPractices}</b> practice${totalPractices===1?"":"s"} ·
+        <b>${totalHours}</b> total hours${unschedNote}
+      </span>
+    </div>
+    <table class="summary-table">
+      <thead>
+        <tr>
+          <th>Team</th>
+          <th class="num">Practices</th>
+          <th class="num">Total time</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+//============================================================
 // MASTER RENDER
 //============================================================
 function render() {
@@ -1555,6 +1712,7 @@ function render() {
   renderGymList();
   renderWeekLabel();
   renderSchedule();
+  renderTeamSummary();
 }
 
 //============================================================
