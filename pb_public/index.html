@@ -737,13 +737,20 @@ async function saveNow() {
   SAVE.timer = null;
   SAVE.saving = true;
   setSaveStatus("saving");
-  const newVersion = (META.version || 0) + 1;
+  const prevVersion = META.version || 0;
+  const newVersion  = prevVersion + 1;
+  // Optimistically bump META.version BEFORE sending so when the realtime
+  // subscription delivers our own write back to us, the
+  //   remoteVer <= META.version
+  // check in subscribeToUpdates() correctly identifies it as our own
+  // change and ignores it. Rolled back on error.
+  META.version = newVersion;
   try {
     const rec = await pb.collection("schedules").update(META.scheduleId, {
       data: STATE,
       version: newVersion
     });
-    META.version = rec.version;
+    META.version = rec.version || newVersion;
     SAVE.saving = false;
     SAVE.lastSyncedAt = new Date();
     if (SAVE.dirty) {
@@ -755,6 +762,7 @@ async function saveNow() {
       setSaveStatus("saved");
     }
   } catch (err) {
+    META.version = prevVersion; // rollback so next attempt retries cleanly
     SAVE.saving = false;
     SAVE.error = err.message || String(err);
     setSaveStatus("error");
