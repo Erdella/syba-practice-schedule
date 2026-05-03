@@ -87,6 +87,7 @@
   }
   #sidebar header h1 .gold-accent { color: var(--gold); }
   #sidebar header .sub { font-size: 11px; color: var(--gold-soft); margin-top: 3px; }
+  #sidebar header .version-tag { font-size: 10px; color: rgba(255,255,255,.4); margin-top: 4px; font-variant-numeric: tabular-nums; }
 
   #sidebar .scroll { overflow-y: auto; padding: 12px 16px; flex: 1; }
   #sidebar h3 {
@@ -505,6 +506,7 @@
       <div class="brand-text">
         <h1>SYBA <span class="gold-accent">NORTH FARGO</span><br>PRACTICE SCHEDULER</h1>
         <div class="sub" id="brand-sub">Read-only · log in to edit</div>
+        <div class="version-tag" id="version-tag"></div>
       </div>
     </div>
   </header>
@@ -564,6 +566,9 @@
 //============================================================
 // CONFIG
 //============================================================
+const APP_VERSION = "0.3.1";
+console.log("[scheduler] app version", APP_VERSION);
+const DEBUG_SYNC = true;  // toggle off later
 const DAY_NAMES = ["Mon","Tue","Wed","Thu","Fri"];
 const START_MIN = 17 * 60;     // 5:00 PM
 const END_MIN   = 21 * 60;     // 9:00 PM
@@ -722,6 +727,7 @@ function sanitizeSchedule(data) {
 
 function markDirty() {
   if (!isEditor() || !META.loaded) return;
+  if (DEBUG_SYNC) console.log("[sync] markDirty (META.version=" + META.version + ")");
   SAVE.dirty = true;
   setSaveStatus("dirty");
   if (SAVE.timer) clearTimeout(SAVE.timer);
@@ -745,11 +751,13 @@ async function saveNow() {
   // check in subscribeToUpdates() correctly identifies it as our own
   // change and ignores it. Rolled back on error.
   META.version = newVersion;
+  if (DEBUG_SYNC) console.log("[sync] saveNow sending version=" + newVersion);
   try {
     const rec = await pb.collection("schedules").update(META.scheduleId, {
       data: STATE,
       version: newVersion
     });
+    if (DEBUG_SYNC) console.log("[sync] saveNow OK, server returned version=" + rec.version);
     META.version = rec.version || newVersion;
     SAVE.saving = false;
     SAVE.lastSyncedAt = new Date();
@@ -801,14 +809,25 @@ function subscribeToUpdates() {
   if (!META.scheduleId) return;
   pb.collection("schedules")
     .subscribe(META.scheduleId, (e) => {
+      if (DEBUG_SYNC) console.log("[sync] realtime event", {
+        action: e.action,
+        remoteVer: e.record && e.record.version,
+        localVer: META.version,
+        dirty: SAVE.dirty,
+        saving: SAVE.saving
+      });
       if (e.action !== "update") return;
       const remoteVer = e.record.version || 0;
-      if (remoteVer <= META.version) return; // our own write, ignore
+      if (remoteVer <= META.version) {
+        if (DEBUG_SYNC) console.log("[sync]   → echo of our own write, ignoring");
+        return;
+      }
+      if (DEBUG_SYNC) console.log("[sync]   → genuine remote change, applying");
       META.version = remoteVer;
       STATE = sanitizeSchedule(e.record.data);
       // If we have a pending local save, the next save will clobber the
       // remote change. With 1–3 editors this is acceptable; flag visibly.
-      if (SAVE.dirty) {
+      if (SAVE.dirty || SAVE.saving) {
         showBanner("error",
           "Another editor just saved while you had unsaved changes. " +
           "Your last edit will overwrite theirs when it syncs.");
@@ -1554,6 +1573,7 @@ function getCss(varName){
 //============================================================
 // BOOT
 //============================================================
+document.getElementById("version-tag").textContent = "v" + APP_VERSION;
 applyAuthMode();
 render();
 loadSchedule();
