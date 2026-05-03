@@ -403,6 +403,14 @@
     background: rgba(255,255,255,.18);
   }
   .practice-block .resize:hover { background: rgba(255,255,255,.4); }
+  .practice-block .resize-top {
+    position: absolute;
+    left: 0; right: 22px; top: 0;     /* leave room for the delete corner */
+    height: 7px;
+    cursor: ns-resize;
+    background: rgba(255,255,255,.18);
+  }
+  .practice-block .resize-top:hover { background: rgba(255,255,255,.4); }
   .practice-block .pb-del {
     position: absolute;
     top: 2px;
@@ -642,7 +650,7 @@
 //============================================================
 // CONFIG
 //============================================================
-const APP_VERSION = "0.3.4";
+const APP_VERSION = "0.3.5";
 console.log("[scheduler] app version", APP_VERSION);
 const DEBUG_SYNC = true;  // toggle off later
 const DAY_NAMES = ["Mon","Tue","Wed","Thu","Fri"];
@@ -1164,13 +1172,17 @@ function renderPracticeBlock(p, isConflict, editor) {
   div.innerHTML = `
     <div>${escapeHtml(name)}</div>
     <div class="pb-time">${fmtTime(p.startMin)}–${fmtTime(p.startMin + p.durationMin)}</div>
-    ${editor ? `<button class="pb-del" title="Delete">×</button><div class="resize" title="Drag to resize"></div>` : ""}`;
+    ${editor ? `
+      <div class="resize-top" title="Drag to change start time"></div>
+      <button class="pb-del" title="Delete">×</button>
+      <div class="resize" title="Drag to change end time"></div>` : ""}`;
   if (editor) {
     div.querySelector(".pb-del").addEventListener("click", e => {
       e.stopPropagation();
       mutate(() => { STATE.practices = STATE.practices.filter(x => x.id !== p.id); });
     });
     div.querySelector(".resize").addEventListener("mousedown", e => startResize(e, p.id, null));
+    div.querySelector(".resize-top").addEventListener("mousedown", e => startResizeTop(e, p.id, null));
   }
   return div;
 }
@@ -1188,13 +1200,17 @@ function renderBlackoutBlock(b, editor) {
   div.innerHTML = `
     <div>⛔ ${escapeHtml(b.label || "Blackout")}</div>
     <div class="pb-time">${fmtTime(b.startMin)}–${fmtTime(b.startMin + b.durationMin)}</div>
-    ${editor ? `<button class="pb-del" title="Delete">×</button><div class="resize" title="Drag to resize"></div>` : ""}`;
+    ${editor ? `
+      <div class="resize-top" title="Drag to change start time"></div>
+      <button class="pb-del" title="Delete">×</button>
+      <div class="resize" title="Drag to change end time"></div>` : ""}`;
   if (editor) {
     div.querySelector(".pb-del").addEventListener("click", e => {
       e.stopPropagation();
       mutate(() => { STATE.blackouts = STATE.blackouts.filter(x => x.id !== b.id); });
     });
     div.querySelector(".resize").addEventListener("mousedown", e => startResize(e, null, b.id));
+    div.querySelector(".resize-top").addEventListener("mousedown", e => startResizeTop(e, null, b.id));
   }
   return div;
 }
@@ -1270,18 +1286,11 @@ function onDragEnd() {
 function onCellDragEnter(e) { e.preventDefault(); e.currentTarget.classList.add("drop-hover"); }
 function onCellDragOver(e)  { e.preventDefault(); e.currentTarget.classList.add("drop-hover"); }
 function onCellDragLeave(e) { e.currentTarget.classList.remove("drop-hover"); }
-// Map a drop event on a cell to a start time, snapped to SNAP_MIN.
-// The cell tells us which 30-min bucket; mouse-Y tells us where inside it.
+// Snap drops to the cell's 30-min start. For 5-min granularity in start
+// time, the user drags the TOP edge of the block after dropping.
 function dropMinFromEvent(cell, e) {
-  const rect = cell.getBoundingClientRect();
-  const yInCell = Math.max(0, Math.min(SLOT_PX, e.clientY - rect.top));
   const cellSlot = parseInt(cell.dataset.slot, 10);
-  const cellStart = START_MIN + cellSlot * SLOT_MIN;
-  const offset = Math.round((yInCell / PX_PER_MIN) / SNAP_MIN) * SNAP_MIN;
-  let startMin = cellStart + offset;
-  // Don't allow drops so late there's no room for any practice
-  startMin = Math.min(startMin, END_MIN - MIN_DUR_MIN);
-  return Math.max(startMin, START_MIN);
+  return START_MIN + cellSlot * SLOT_MIN;
 }
 
 function onCellDrop(e) {
@@ -1353,7 +1362,6 @@ function startResize(e, practiceId, blackoutId) {
   const startDur = item.durationMin;
   const move = ev => {
     const dy = ev.clientY - startY;
-    // Snap the cumulative drag delta to SNAP_MIN (5-min) increments
     const dyMin = Math.round((dy / PX_PER_MIN) / SNAP_MIN) * SNAP_MIN;
     const next = clampDur(startDur + dyMin, item.startMin);
     if (next !== item.durationMin) {
@@ -1365,6 +1373,41 @@ function startResize(e, practiceId, blackoutId) {
     document.removeEventListener("mousemove", move);
     document.removeEventListener("mouseup", up);
     if (item.durationMin !== startDur) markDirty();
+  };
+  document.addEventListener("mousemove", move);
+  document.addEventListener("mouseup", up);
+}
+
+// Drag the top edge: end time stays put, start time shifts in 5-min steps.
+function startResizeTop(e, practiceId, blackoutId) {
+  if (!isEditor()) return;
+  e.preventDefault(); e.stopPropagation();
+  const item = practiceId
+    ? STATE.practices.find(p => p.id === practiceId)
+    : STATE.blackouts.find(b => b.id === blackoutId);
+  if (!item) return;
+  const startY = e.clientY;
+  const origStart = item.startMin;
+  const origDur   = item.durationMin;
+  const fixedEnd  = origStart + origDur;
+  const move = ev => {
+    const dy = ev.clientY - startY;
+    const dyMin = Math.round((dy / PX_PER_MIN) / SNAP_MIN) * SNAP_MIN;
+    let newStart = origStart + dyMin;
+    // Constrain: can't start before schedule start, must leave at least
+    // MIN_DUR_MIN of practice before the (fixed) end.
+    newStart = Math.max(START_MIN, Math.min(fixedEnd - MIN_DUR_MIN, newStart));
+    const newDur = fixedEnd - newStart;
+    if (newStart !== item.startMin || newDur !== item.durationMin) {
+      item.startMin    = newStart;
+      item.durationMin = newDur;
+      render();
+    }
+  };
+  const up = () => {
+    document.removeEventListener("mousemove", move);
+    document.removeEventListener("mouseup", up);
+    if (item.startMin !== origStart) markDirty();
   };
   document.addEventListener("mousemove", move);
   document.addEventListener("mouseup", up);
