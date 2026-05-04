@@ -651,7 +651,7 @@
 //============================================================
 // CONFIG
 //============================================================
-const APP_VERSION = "0.3.7";
+const APP_VERSION = "0.3.8";
 console.log("[scheduler] app version", APP_VERSION);
 const DEBUG_SYNC = true;  // toggle off later
 // Weekdays SYBA actually practices on. Offset is days from Monday (0=Mon..4=Fri).
@@ -1116,9 +1116,11 @@ function renderSchedule() {
   bodyRow.appendChild(timeCol);
 
   const conflictIds = new Set();
+  const lanesByDate = {};   // dk → { lane:{id→0|1}, sharing:Set<id> }
   for (const day of WEEKDAYS) {
     const dk = dateKey(addDays(currentMonday, day.offset));
     computeConflicts(dk).forEach(id => conflictIds.add(id));
+    lanesByDate[dk] = computeLanes(dk);
   }
 
   const editor = isEditor();
@@ -1148,9 +1150,12 @@ function renderSchedule() {
         gymStrip.appendChild(cell);
       }
 
+      const laneInfo = lanesByDate[dk];
       for (const p of STATE.practices) {
         if (p.date !== dk || p.gymId !== g.id) continue;
-        gymStrip.appendChild(renderPracticeBlock(p, conflictIds.has(p.id), editor));
+        const lane    = laneInfo.lane[p.id] || 0;
+        const sharing = laneInfo.sharing.has(p.id);
+        gymStrip.appendChild(renderPracticeBlock(p, conflictIds.has(p.id), editor, lane, sharing));
       }
       for (const b of STATE.blackouts) {
         if (b.date !== dk || b.gymId !== g.id) continue;
@@ -1163,13 +1168,24 @@ function renderSchedule() {
   host.appendChild(bodyRow);
 }
 
-function renderPracticeBlock(p, isConflict, editor) {
+function renderPracticeBlock(p, isConflict, editor, lane, sharing) {
   const t = teamById(p.teamId);
   const div = document.createElement("div");
-  div.className = "practice-block" + (isConflict ? " conflict" : "");
+  div.className = "practice-block" + (isConflict ? " conflict" : "") + (sharing ? " shared" : "");
   div.style.background = t ? t.color : "#666";
   div.style.top    = ((p.startMin - START_MIN) / SLOT_MIN * SLOT_PX) + "px";
   div.style.height = (p.durationMin / SLOT_MIN * SLOT_PX) + "px";
+  // Two-team sharing: lane 0 = left half, lane 1 = right half. Solo blocks
+  // span the full gym column.
+  if (sharing) {
+    if (lane === 0) {
+      div.style.left  = "2px";
+      div.style.right = "calc(50% + 1px)";
+    } else {
+      div.style.left  = "calc(50% + 1px)";
+      div.style.right = "2px";
+    }
+  }
   div.draggable = editor;
   div.dataset.practiceId = p.id;
   if (editor) {
@@ -1224,27 +1240,104 @@ function renderBlackoutBlock(b, editor) {
 }
 
 //============================================================
-// CONFLICTS
+// CONFLICTS & LANES
+//
+// Up to 2 simultaneous practices in one gym are OK (big gyms host two
+// teams). Conflict fires when 3+ practices overlap simultaneously, OR
+// when any practice overlaps a blackout in the same gym.
+// Lane assignment puts overlapping pairs side-by-side at half-width.
 //============================================================
+function rangesOverlap(a, b) {
+  return a.startMin < b.startMin + b.durationMin
+      && b.startMin < a.startMin + a.durationMin;
+}
 function computeConflicts(dk) {
   const conflict = new Set();
+  const practicesByGym = {};
+  const blackoutsByGym = {};
+  for (const p of STATE.practices) {
+    if (p.date !== dk) continue;
+    (practicesByGym[p.gymId] = practicesByGym[p.gymId] || []).push(p);
+  }
+  for (const b of STATE.blackouts) {
+    if (b.date !== dk) continue;
+    (blackoutsByGym[b.gymId] = blackoutsByGym[b.gymId] || []).push(b);
+  }
+
+  // Practice ↔ blackout: any overlap is a conflict (gym is closed)
+  for (const gid in practicesByGym) {
+    const blackouts = blackoutsByGym[gid] || [];
+    for (const p of practicesByGym[gid]) {
+      for (const b of blackouts) {
+        if (rangesOverlap(p, b)) {
+          conflict.add(p.id);
+          conflict.add(b.id);
+        }
+      }
+    }
+  }
+
+  // 3+ simultaneous practices in one gym → conflict (sweep-line)
+  for (const gid in practicesByGym) {
+    const list = practicesByGym[gid];
+    const events = [];
+    for (const p of list) {
+      events.push({ t: p.startMin, kind: "start", p });
+      events.push({ t: p.startMin + p.durationMin, kind: "end", p });
+    }
+    // Process ends before starts at the same instant so back-to-back
+    // practices don't read as concurrent.
+    events.sort((a, b) => a.t - b.t || (a.kind === "end" ? -1 : 1));
+    const active = new Set();
+    for (const e of events) {
+      if (e.kind === "start") {
+        active.add(e.p);
+        if (active.size > 2) {
+          for (const p of active) conflict.add(p.id);
+        }
+      } else {
+        active.delete(e.p);
+      }
+    }
+  }
+  return conflict;
+}
+
+// Assign each practice in each gym to lane 0 (left half) or lane 1
+// (right half) so two overlapping practices render side-by-side.
+// Returns { lane: {id → 0|1}, sharing: Set<id> } where sharing is true
+// for practices that overlap with another (render half-width).
+function computeLanes(dk) {
+  const lane = {};
+  const sharing = new Set();
   const byGym = {};
   for (const p of STATE.practices) {
     if (p.date !== dk) continue;
     (byGym[p.gymId] = byGym[p.gymId] || []).push(p);
   }
   for (const gid in byGym) {
-    const arr = byGym[gid];
-    for (let i=0; i<arr.length; i++) {
-      for (let j=i+1; j<arr.length; j++) {
-        const a = arr[i], b = arr[j];
-        if (a.startMin < b.startMin + b.durationMin && b.startMin < a.startMin + a.durationMin) {
-          conflict.add(a.id); conflict.add(b.id);
+    const list = [...byGym[gid]].sort((a, b) => a.startMin - b.startMin);
+    const laneEnd = [0, 0]; // when lane[i] becomes free
+    for (const p of list) {
+      let assigned = -1;
+      for (let i = 0; i < 2; i++) {
+        if (laneEnd[i] <= p.startMin) { assigned = i; break; }
+      }
+      if (assigned === -1) assigned = 0; // 3+ overlap fallback
+      lane[p.id] = assigned;
+      laneEnd[assigned] = Math.max(laneEnd[assigned], p.startMin + p.durationMin);
+    }
+    // Mark every practice that overlaps with at least one other in the gym
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        if (rangesOverlap(list[i], list[j])) {
+          sharing.add(list[i].id);
+          sharing.add(list[j].id);
         }
       }
     }
   }
-  return conflict;
+  return { lane, sharing };
 }
 
 //============================================================
