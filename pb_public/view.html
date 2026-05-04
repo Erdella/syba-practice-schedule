@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SYBA North Fargo Practice Schedule</title>
+<link rel="icon" href="https://sybafargo.dreamhosters.com/wp-content/uploads/2026/02/SYBA-logo-150x150.png">
+<meta name="theme-color" content="#0c2340">
+<style>
+  :root {
+    --accent: #0c2340;
+    --accent-2: #14305a;
+    --gold: #c8a93e;
+    --gold-soft: #f7eecb;
+    --bg: #f3f5f8;
+    --panel: #ffffff;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --line: #e3e8ef;
+    --danger: #c1272d;
+    --ok: #15803d;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ============== Hero ============== */
+  .hero {
+    background: var(--accent);
+    color: white;
+    padding: 18px 16px 16px;
+    border-bottom: 4px solid var(--gold);
+    text-align: center;
+  }
+  .hero img {
+    width: 56px; height: 56px;
+    border-radius: 8px;
+    background: white;
+    padding: 3px;
+    box-shadow: 0 0 0 2px var(--gold);
+    display: block;
+    margin: 0 auto;
+  }
+  .hero h1 {
+    margin: 10px 0 0;
+    font-size: 17px;
+    letter-spacing: 1px;
+    line-height: 1.2;
+  }
+  .hero h1 .gold { color: var(--gold); }
+  .hero .tagline {
+    font-size: 12px;
+    opacity: 0.75;
+    margin: 4px 0 0;
+    letter-spacing: .3px;
+  }
+
+  /* ============== Controls (sticky on scroll) ============== */
+  .controls {
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    padding: 12px 14px;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  }
+  .week-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .week-nav button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    min-width: 44px;        /* WCAG touch target */
+    min-height: 36px;
+  }
+  .week-nav button:hover, .week-nav button:focus { background: var(--accent-2); }
+  .week-nav button.today {
+    background: var(--gold);
+    color: var(--accent);
+  }
+  .week-nav button.today:hover { background: #b89630; }
+  .week-label {
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 14px;
+    flex: 1;
+    text-align: center;
+    padding: 0 4px;
+  }
+  .filter-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    align-items: center;
+    justify-content: center;
+  }
+  .filter-row label {
+    font-size: 13px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .filter-row select {
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: white;
+    font: inherit;
+    font-size: 14px;
+    flex: 1;
+    max-width: 320px;
+    min-height: 38px;
+  }
+
+  /* ============== Schedule list ============== */
+  main {
+    max-width: 740px;
+    margin: 0 auto;
+    padding: 14px;
+  }
+  .day-section {
+    margin-bottom: 16px;
+    background: var(--panel);
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.05);
+    overflow: hidden;
+  }
+  .day-header {
+    background: var(--accent);
+    color: white;
+    padding: 10px 14px;
+    font-size: 14px;
+    font-weight: 700;
+    border-bottom: 3px solid var(--gold);
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    letter-spacing: .3px;
+  }
+  .day-header .count {
+    margin-left: auto;
+    font-size: 11px;
+    background: rgba(255,255,255,.2);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+  }
+  .day-header.today {
+    background: var(--gold);
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .day-header.today .count {
+    background: rgba(12,35,64,.15);
+    color: var(--accent);
+  }
+  .day-body { background: var(--panel); }
+
+  .practice-row {
+    display: flex;
+    align-items: center;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .practice-row:last-child { border-bottom: none; }
+  .practice-row .time {
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 14px;
+    flex: 0 0 auto;
+    min-width: 145px;
+    font-variant-numeric: tabular-nums;
+  }
+  .practice-row .team {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 200px;
+    min-width: 0;
+  }
+  .practice-row .swatch {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.1);
+  }
+  .practice-row .team-name {
+    font-weight: 600;
+    color: var(--text);
+  }
+  .practice-row .gym {
+    color: var(--muted);
+    font-size: 13px;
+    flex: 0 0 auto;
+  }
+
+  .blackout-row { background: #faf2f2; }
+  .blackout-row .team-name { color: #7a1416; font-weight: 600; }
+  .blackout-row .time { color: #7a1416; }
+
+  .empty-day {
+    padding: 16px 14px;
+    text-align: center;
+    color: var(--muted);
+    font-style: italic;
+    font-size: 13px;
+  }
+
+  /* ============== Status banner ============== */
+  .status-row {
+    text-align: center;
+    padding: 12px 16px 4px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .status-row .dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--ok);
+    vertical-align: middle;
+    margin-right: 6px;
+    animation: livepulse 2.2s infinite;
+  }
+  .status-row.error .dot { background: var(--danger); animation: none; }
+  @keyframes livepulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+
+  /* ============== Footer ============== */
+  footer {
+    text-align: center;
+    padding: 18px 16px 28px;
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  footer a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+  }
+  footer a:hover { text-decoration: underline; }
+  footer .version { color: #b0b6c0; font-size: 10px; margin-top: 6px; }
+
+  /* ============== Mobile tweaks (already mobile-first) ============== */
+  @media (max-width: 480px) {
+    .practice-row { padding: 10px 12px; }
+    .practice-row .time { min-width: 120px; font-size: 13.5px; }
+    .practice-row .gym { flex-basis: 100%; padding-left: 22px; margin-top: -4px; }
+    .day-header { font-size: 13.5px; }
+    .hero h1 { font-size: 16px; }
+  }
+
+  /* ============== Tablet/desktop tweaks ============== */
+  @media (min-width: 720px) {
+    .hero { padding: 24px 16px 18px; }
+    .hero h1 { font-size: 22px; }
+    .hero img { width: 64px; height: 64px; }
+    .practice-row .time { min-width: 165px; font-size: 15px; }
+    .practice-row .team-name { font-size: 15px; }
+    .practice-row .gym { font-size: 14px; }
+  }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/pocketbase@0.21.5/dist/pocketbase.umd.js"></script>
+</head>
+<body>
+
+<div class="hero">
+  <img src="https://sybafargo.dreamhosters.com/wp-content/uploads/2026/02/SYBA-logo-150x150.png"
+       alt="SYBA logo" onerror="this.style.display='none'">
+  <h1>SYBA <span class="gold">NORTH FARGO</span></h1>
+  <div class="tagline">Practice Schedule</div>
+</div>
+
+<div class="controls">
+  <div class="week-nav">
+    <button onclick="shiftWeek(-1)" aria-label="Previous week">◀</button>
+    <span class="week-label" id="week-label"></span>
+    <button onclick="shiftWeek(1)" aria-label="Next week">▶</button>
+    <button class="today" onclick="goToday()">Today</button>
+  </div>
+  <div class="filter-row">
+    <label for="team-filter">Team:</label>
+    <select id="team-filter" onchange="setFilter(this.value)">
+      <option value="">All teams</option>
+    </select>
+  </div>
+</div>
+
+<main id="schedule-main">
+  <div class="empty-day">Loading…</div>
+</main>
+
+<div class="status-row" id="status-row">
+  <span class="dot"></span><span id="status-text">Live · auto-updates</span>
+</div>
+
+<footer>
+  <a href="/">Editor login →</a>
+  <div class="version" id="version-tag"></div>
+</footer>
+
+<script>
+//============================================================
+// CONFIG
+//============================================================
+const APP_VERSION = "0.3.6";
+const DAY_NAMES_LONG = ["Monday","Tuesday","Wednesday","Thursday","Friday"];
+const GRADES  = ["3rd","4th","5th","6th","7th","8th"];
+const GENDERS = ["Boys","Girls"];
+
+//============================================================
+// POCKETBASE CLIENT
+//============================================================
+const pb = new PocketBase(window.location.origin);
+pb.autoCancellation(false);
+
+//============================================================
+// STATE
+//============================================================
+let STATE = { teams: [], gyms: [], practices: [], blackouts: [] };
+let scheduleId = null;
+let currentMonday = mondayOf(new Date());
+let teamFilter = "";
+
+// Read team filter from URL ?team=...
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.has("team")) teamFilter = urlParams.get("team");
+
+//============================================================
+// DATE HELPERS
+//============================================================
+function mondayOf(d) {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const wd = x.getDay();
+  const diff = (wd === 0 ? -6 : 1 - wd);
+  x.setDate(x.getDate() + diff);
+  return x;
+}
+function addDays(d, n) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+function dateKey(d) {
+  return d.getFullYear() + "-" +
+    String(d.getMonth()+1).padStart(2,"0") + "-" +
+    String(d.getDate()).padStart(2,"0");
+}
+function fmtMonthDay(d) {
+  return d.toLocaleDateString(undefined, { month:"short", day:"numeric" });
+}
+function fmtDayLong(d) {
+  return d.toLocaleDateString(undefined, { weekday:"long", month:"short", day:"numeric" });
+}
+function fmtTime(min) {
+  let h = Math.floor(min/60), m = min%60;
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12  = ((h+11)%12)+1;
+  return h12 + ":" + String(m).padStart(2,"0") + " " + ampm;
+}
+function isSameDate(a, b) {
+  return a.getFullYear()===b.getFullYear() &&
+         a.getMonth()===b.getMonth() &&
+         a.getDate()===b.getDate();
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({
+  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+}[c])); }
+
+//============================================================
+// LOOKUPS
+//============================================================
+const teamById = id => STATE.teams.find(t => t.id === id);
+const gymById  = id => STATE.gyms.find(g => g.id === id);
+const teamLabel = t => `${t.grade} Grade ${t.gender} ${t.name}`;
+function gymOrder(gymId) {
+  const idx = STATE.gyms.findIndex(g => g.id === gymId);
+  return idx === -1 ? 999 : idx;
+}
+
+//============================================================
+// LOAD / SUBSCRIBE
+//============================================================
+async function loadSchedule() {
+  try {
+    const records = await pb.collection("schedules").getFullList();
+    if (!records.length) {
+      showError("Schedule not yet initialized.");
+      return;
+    }
+    const rec = records[0];
+    scheduleId = rec.id;
+    STATE = sanitize(rec.data);
+    populateTeamFilter();
+    render();
+    subscribeToUpdates();
+  } catch (err) {
+    showError("Couldn't load schedule: " + (err.message || err));
+  }
+}
+function sanitize(d) {
+  d = d || {};
+  return {
+    teams: Array.isArray(d.teams) ? d.teams : [],
+    gyms:  Array.isArray(d.gyms)  ? d.gyms  : [],
+    practices: Array.isArray(d.practices) ? d.practices : [],
+    blackouts: Array.isArray(d.blackouts) ? d.blackouts : []
+  };
+}
+function showError(msg) {
+  document.getElementById("schedule-main").innerHTML =
+    `<div class="empty-day">${escapeHtml(msg)}</div>`;
+  const sr = document.getElementById("status-row");
+  sr.classList.add("error");
+  document.getElementById("status-text").textContent = "Connection error";
+}
+function subscribeToUpdates() {
+  if (!scheduleId) return;
+  pb.collection("schedules")
+    .subscribe(scheduleId, (e) => {
+      if (e.action === "update") {
+        STATE = sanitize(e.record.data);
+        populateTeamFilter();
+        render();
+        flashUpdate();
+      }
+    })
+    .catch(err => console.warn("realtime subscribe failed:", err));
+}
+function flashUpdate() {
+  const txt = document.getElementById("status-text");
+  txt.textContent = "Just updated";
+  setTimeout(() => { txt.textContent = "Live · auto-updates"; }, 2500);
+}
+
+//============================================================
+// FILTER + TEAMS
+//============================================================
+function populateTeamFilter() {
+  const sel = document.getElementById("team-filter");
+  // Group by Grade + Gender, ordered like the editor
+  const groups = {};
+  for (const t of STATE.teams) {
+    const k = `${t.grade} Grade ${t.gender}`;
+    (groups[k] = groups[k] || []).push(t);
+  }
+  const orderedKeys = [];
+  for (const g of GRADES) for (const sx of GENDERS) {
+    const k = `${g} Grade ${sx}`;
+    if (groups[k]) orderedKeys.push(k);
+  }
+  let html = `<option value="">All teams</option>`;
+  for (const k of orderedKeys) {
+    html += `<optgroup label="${escapeHtml(k)}">`;
+    for (const t of groups[k]) {
+      const sel = teamFilter === t.id ? " selected" : "";
+      html += `<option value="${escapeHtml(t.id)}"${sel}>${escapeHtml(teamLabel(t))}</option>`;
+    }
+    html += `</optgroup>`;
+  }
+  sel.innerHTML = html;
+}
+function setFilter(v) {
+  teamFilter = v || "";
+  // Reflect in URL so it's shareable / bookmarkable
+  const url = new URL(window.location.href);
+  if (teamFilter) url.searchParams.set("team", teamFilter);
+  else url.searchParams.delete("team");
+  window.history.replaceState({}, "", url);
+  render();
+}
+
+//============================================================
+// WEEK NAV
+//============================================================
+function shiftWeek(n) { currentMonday = addDays(currentMonday, n*7); render(); }
+function goToday()    { currentMonday = mondayOf(new Date()); render(); }
+
+//============================================================
+// RENDER
+//============================================================
+function render() {
+  // Week label
+  const start = currentMonday;
+  const end = addDays(start, 4);
+  document.getElementById("week-label").textContent =
+    `Week of ${fmtMonthDay(start)} – ${fmtMonthDay(end)}, ${end.getFullYear()}`;
+
+  const main = document.getElementById("schedule-main");
+  main.innerHTML = "";
+
+  const today = new Date();
+  const filteredTeam = teamFilter ? teamById(teamFilter) : null;
+  let totalShown = 0;
+
+  for (let d = 0; d < 5; d++) {
+    const date = addDays(currentMonday, d);
+    const dk   = dateKey(date);
+    const isToday = isSameDate(date, today);
+
+    let practices = STATE.practices.filter(p => p.date === dk);
+    if (teamFilter) practices = practices.filter(p => p.teamId === teamFilter);
+    practices.sort((a,b) => a.startMin - b.startMin || gymOrder(a.gymId) - gymOrder(b.gymId));
+
+    let blackouts = STATE.blackouts.filter(b => b.date === dk);
+    blackouts.sort((a,b) => a.startMin - b.startMin);
+
+    // Hide blackouts when filtering to a single team (irrelevant noise)
+    if (teamFilter) blackouts = [];
+
+    const dayDiv = document.createElement("div");
+    dayDiv.className = "day-section";
+
+    const header = document.createElement("div");
+    header.className = "day-header" + (isToday ? " today" : "");
+    const cnt = practices.length + blackouts.length;
+    header.innerHTML =
+      `<span>${escapeHtml(fmtDayLong(date))}</span>` +
+      (cnt ? `<span class="count">${cnt}</span>` : "");
+    dayDiv.appendChild(header);
+
+    const body = document.createElement("div");
+    body.className = "day-body";
+
+    if (!practices.length && !blackouts.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty-day";
+      empty.textContent = teamFilter ? "No practice scheduled" : "Nothing scheduled";
+      body.appendChild(empty);
+    } else {
+      // Merge and sort
+      const items = [
+        ...practices.map(p => ({ ...p, _kind: "p" })),
+        ...blackouts.map(b => ({ ...b, _kind: "b" }))
+      ].sort((a,b) => a.startMin - b.startMin || gymOrder(a.gymId) - gymOrder(b.gymId));
+
+      for (const item of items) {
+        const row = document.createElement("div");
+        row.className = "practice-row" + (item._kind === "b" ? " blackout-row" : "");
+        const endMin = item.startMin + item.durationMin;
+        const timeText = `${fmtTime(item.startMin)} – ${fmtTime(endMin)}`;
+        const gym = gymById(item.gymId);
+        if (item._kind === "p") {
+          const t = teamById(item.teamId);
+          const teamName = t ? teamLabel(t) : "(unknown team)";
+          const color = t ? t.color : "#999";
+          row.innerHTML = `
+            <span class="time">${escapeHtml(timeText)}</span>
+            <span class="team">
+              <span class="swatch" style="background:${color}"></span>
+              <span class="team-name">${escapeHtml(teamName)}</span>
+            </span>
+            <span class="gym">${escapeHtml(gym ? gym.name : "")}</span>`;
+        } else {
+          row.innerHTML = `
+            <span class="time">${escapeHtml(timeText)}</span>
+            <span class="team">
+              <span class="team-name">⛔ ${escapeHtml(item.label || "Blackout")}</span>
+            </span>
+            <span class="gym">${escapeHtml(gym ? gym.name : "")}</span>`;
+        }
+        body.appendChild(row);
+        totalShown++;
+      }
+    }
+    dayDiv.appendChild(body);
+    main.appendChild(dayDiv);
+  }
+
+  if (totalShown === 0) {
+    const note = document.createElement("div");
+    note.className = "empty-day";
+    note.style.background = "var(--panel)";
+    note.style.borderRadius = "8px";
+    note.style.padding = "20px";
+    note.style.marginTop = "8px";
+    note.textContent = filteredTeam
+      ? `No practices scheduled for ${teamLabel(filteredTeam)} this week.`
+      : "No practices or blackouts scheduled this week.";
+    main.appendChild(note);
+  }
+}
+
+//============================================================
+// BOOT
+//============================================================
+document.getElementById("version-tag").textContent = "v" + APP_VERSION;
+loadSchedule();
+</script>
+</body>
+</html>

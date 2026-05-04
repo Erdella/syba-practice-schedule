@@ -630,6 +630,7 @@
 
     <span class="spacer"></span>
 
+    <button onclick="window.open('/view.html', '_blank')" title="Open the parent/coach view in a new tab">👁 Parent view</button>
     <button class="gold" onclick="openCalendarModal()">📅 Export team calendars</button>
 
     <span class="auth-info" id="auth-info"></span>
@@ -650,7 +651,7 @@
 //============================================================
 // CONFIG
 //============================================================
-const APP_VERSION = "0.3.5";
+const APP_VERSION = "0.3.6";
 console.log("[scheduler] app version", APP_VERSION);
 const DEBUG_SYNC = true;  // toggle off later
 const DAY_NAMES = ["Mon","Tue","Wed","Thu","Fri"];
