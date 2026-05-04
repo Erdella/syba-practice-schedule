@@ -431,6 +431,10 @@
     background: repeating-linear-gradient(45deg, #555, #555 7px, #6a6a6a 7px, #6a6a6a 14px);
   }
   body.dragging .drop-cell { cursor: copy; }
+  /* During any drag, let mouse events pass THROUGH practice blocks to the
+     cells beneath, so a chip can be dropped onto a slot that already has
+     a team in it (for 2-team gym sharing). */
+  body.dragging .practice-block { pointer-events: none; }
 
   /* ============== Team summary (bottom of page) ============== */
   #team-summary {
@@ -651,7 +655,7 @@
 //============================================================
 // CONFIG
 //============================================================
-const APP_VERSION = "0.3.8";
+const APP_VERSION = "0.3.9";
 console.log("[scheduler] app version", APP_VERSION);
 const DEBUG_SYNC = true;  // toggle off later
 // Weekdays SYBA actually practices on. Offset is days from Monday (0=Mon..4=Fri).
