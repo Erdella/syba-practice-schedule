@@ -299,7 +299,8 @@
   <div class="filter-row">
     <label for="team-filter">Team:</label>
     <select id="team-filter" onchange="setFilter(this.value)">
-      <option value="">All teams</option>
+      <option value="" disabled selected>— Pick your team —</option>
+      <option value="__all__">Show all teams</option>
     </select>
   </div>
 </div>
@@ -321,7 +322,7 @@
 //============================================================
 // CONFIG
 //============================================================
-const APP_VERSION = "0.3.7";
+const APP_VERSION = "0.3.11";
 // Weekdays SYBA actually practices on. Keep in sync with the editor's index.html.
 const WEEKDAYS = [
   { name: "Mon", offset: 0 },
@@ -473,12 +474,14 @@ function populateTeamFilter() {
     const k = `${g} Grade ${sx}`;
     if (groups[k]) orderedKeys.push(k);
   }
-  let html = `<option value="">All teams</option>`;
+  // Default option: empty string = "no team picked" → render() shows a prompt.
+  let html = `<option value="" ${teamFilter === "" ? "selected" : ""} disabled>— Pick your team —</option>`;
+  html += `<option value="__all__" ${teamFilter === "__all__" ? "selected" : ""}>Show all teams</option>`;
   for (const k of orderedKeys) {
     html += `<optgroup label="${escapeHtml(k)}">`;
     for (const t of groups[k]) {
-      const sel = teamFilter === t.id ? " selected" : "";
-      html += `<option value="${escapeHtml(t.id)}"${sel}>${escapeHtml(teamLabel(t))}</option>`;
+      const isSel = teamFilter === t.id ? " selected" : "";
+      html += `<option value="${escapeHtml(t.id)}"${isSel}>${escapeHtml(teamLabel(t))}</option>`;
     }
     html += `</optgroup>`;
   }
@@ -513,8 +516,25 @@ function render() {
   const main = document.getElementById("schedule-main");
   main.innerHTML = "";
 
+  // No team picked yet — show a friendly prompt and stop.
+  if (!teamFilter) {
+    main.innerHTML = `
+      <div style="text-align:center; padding:40px 20px; background:var(--panel);
+                  border-radius:8px; box-shadow:0 1px 2px rgba(0,0,0,.05);">
+        <div style="font-size:36px; margin-bottom:10px;">👆</div>
+        <div style="font-weight:700; color:var(--accent); font-size:16px; margin-bottom:6px;">
+          Pick your team to see this week's schedule
+        </div>
+        <div style="color:var(--muted); font-size:13px;">
+          Use the dropdown above. Choose <b>Show all teams</b> to see everyone's practices.
+        </div>
+      </div>`;
+    return;
+  }
+
+  const showingAll = teamFilter === "__all__";
   const today = new Date();
-  const filteredTeam = teamFilter ? teamById(teamFilter) : null;
+  const filteredTeam = (!showingAll && teamFilter) ? teamById(teamFilter) : null;
   let totalShown = 0;
 
   for (const day of WEEKDAYS) {
@@ -523,14 +543,14 @@ function render() {
     const isToday = isSameDate(date, today);
 
     let practices = STATE.practices.filter(p => p.date === dk);
-    if (teamFilter) practices = practices.filter(p => p.teamId === teamFilter);
+    if (!showingAll) practices = practices.filter(p => p.teamId === teamFilter);
     practices.sort((a,b) => a.startMin - b.startMin || gymOrder(a.gymId) - gymOrder(b.gymId));
 
     let blackouts = STATE.blackouts.filter(b => b.date === dk);
     blackouts.sort((a,b) => a.startMin - b.startMin);
 
     // Hide blackouts when filtering to a single team (irrelevant noise)
-    if (teamFilter) blackouts = [];
+    if (!showingAll) blackouts = [];
 
     const dayDiv = document.createElement("div");
     dayDiv.className = "day-section";
@@ -549,7 +569,7 @@ function render() {
     if (!practices.length && !blackouts.length) {
       const empty = document.createElement("div");
       empty.className = "empty-day";
-      empty.textContent = teamFilter ? "No practice scheduled" : "Nothing scheduled";
+      empty.textContent = !showingAll ? "No practice scheduled" : "Nothing scheduled";
       body.appendChild(empty);
     } else {
       // Merge and sort

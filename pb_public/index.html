@@ -145,6 +145,15 @@
   .chip.blackout {
     background: repeating-linear-gradient(45deg, #4a4a4a, #4a4a4a 6px, #5a5a5a 6px, #5a5a5a 12px);
   }
+  /* Light-colored team chips (e.g. white, pale yellow): dark text + outline */
+  .chip.light {
+    border: 1px solid rgba(0,0,0,.18);
+  }
+  .chip.light .iconbtn {
+    background: rgba(0,0,0,.15);
+    color: #1a1a1a;
+  }
+  .chip.light .iconbtn:hover { background: rgba(0,0,0,.30); }
   .gym-row {
     display: flex;
     align-items: center;
@@ -280,6 +289,10 @@
     flex-shrink: 0;
     background: white;
     border-right: 2px solid var(--line);
+    /* Stay locked to the top-left even when the user scrolls horizontally */
+    position: sticky;
+    left: 0;
+    z-index: 11;
   }
   .day-group {
     display: flex;
@@ -315,7 +328,10 @@
   .day-today .day-title { background: var(--gold); color: var(--accent); border-bottom-color: var(--accent); }
   .day-today .gym-header { background: var(--gold-soft); }
 
-  .body-row { display: flex; }
+  .body-row {
+    display: flex;
+    align-items: flex-start;   /* prevent flex-stretch from breaking sticky on time-col */
+  }
   .time-col {
     width: var(--time-col);
     flex-shrink: 0;
@@ -324,6 +340,7 @@
     position: sticky;
     left: 0;
     z-index: 5;
+    align-self: stretch;       /* match height of day-strips */
   }
   .time-label {
     height: var(--slot);
@@ -430,6 +447,23 @@
   .practice-block.blackout-block {
     background: repeating-linear-gradient(45deg, #555, #555 7px, #6a6a6a 7px, #6a6a6a 14px);
   }
+  /* Light-colored team blocks: dark text and a faint outline so the block
+     is visible against the white grid background. */
+  .practice-block.light {
+    border: 1px solid rgba(0,0,0,.18);
+  }
+  .practice-block.light .pb-del {
+    background: rgba(0,0,0,.30);
+    color: #1a1a1a;
+  }
+  .practice-block.light .resize,
+  .practice-block.light .resize-top {
+    background: rgba(0,0,0,.10);
+  }
+  .practice-block.light .resize:hover,
+  .practice-block.light .resize-top:hover {
+    background: rgba(0,0,0,.25);
+  }
   body.dragging .drop-cell { cursor: copy; }
   /* During any drag, let mouse events pass THROUGH practice blocks to the
      cells beneath, so a chip can be dropped onto a slot that already has
@@ -501,6 +535,11 @@
     white-space: nowrap;
   }
   .summary-table .none { color: var(--muted); }
+  .summary-table .times-cell {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.35;
+  }
   .summary-table .group-row td {
     background: var(--accent-soft);
     color: var(--accent);
@@ -562,11 +601,39 @@
     height: 28px;
     border-radius: 4px;
     cursor: pointer;
-    border: 2px solid transparent;
+    border: 1px solid rgba(0,0,0,.18);
+    transition: transform .08s;
   }
+  .swatch:hover { transform: scale(1.08); }
   .swatch.selected {
-    border-color: #111;
-    box-shadow: 0 0 0 2px white inset;
+    outline: 3px solid #111;
+    outline-offset: -1px;
+  }
+  .custom-color-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--line);
+  }
+  .custom-color-row label { margin: 0; font-weight: 600; font-size: 12px; }
+  .custom-color-row input[type="color"] {
+    width: 50px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    cursor: pointer;
+    background: white;
+  }
+  .custom-color-row .hex-display {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    color: var(--muted);
+    background: #f3f5f8;
+    padding: 4px 8px;
+    border-radius: 4px;
   }
   .calendar-list .row {
     display: flex;
@@ -655,7 +722,7 @@
 //============================================================
 // CONFIG
 //============================================================
-const APP_VERSION = "0.3.9";
+const APP_VERSION = "0.3.11";
 console.log("[scheduler] app version", APP_VERSION);
 const DEBUG_SYNC = true;  // toggle off later
 // Weekdays SYBA actually practices on. Offset is days from Monday (0=Mon..4=Fri).
@@ -676,9 +743,18 @@ const PX_PER_MIN = SLOT_PX / SLOT_MIN;  // 1.2 px per minute
 const DEFAULT_DUR_MIN = 90;    // 1.5 hr
 const SLOT_COUNT = (END_MIN - START_MIN) / SLOT_MIN;
 const COLORS = [
-  "#0c2340","#c8a93e","#c1272d","#0b6e4f","#7a3e9d","#d97706",
-  "#0e7490","#be185d","#374151","#4f46e5","#a16207","#15803d",
-  "#9a3412","#6b21a8","#0369a1","#525252"
+  // Blues
+  "#0c2340", "#1e3a8a", "#2563eb", "#0369a1", "#0e7490", "#06b6d4",
+  // Reds / Pinks
+  "#7f1d1d", "#c1272d", "#dc2626", "#ef4444", "#be185d", "#ec4899",
+  // Oranges / Yellows / Golds
+  "#9a3412", "#ea580c", "#d97706", "#a16207", "#c8a93e", "#eab308",
+  // Greens / Teals
+  "#14532d", "#15803d", "#16a34a", "#65a30d", "#0b6e4f", "#0d9488",
+  // Purples
+  "#4f46e5", "#7c3aed", "#7a3e9d", "#6b21a8",
+  // Neutrals (black → white)
+  "#1f2937", "#374151", "#525252", "#9ca3af", "#ffffff"
 ];
 const GRADES  = ["3rd","4th","5th","6th","7th","8th"];
 const GENDERS = ["Boys","Girls"];
@@ -762,6 +838,19 @@ const teamById  = id => STATE.teams.find(t => t.id === id);
 const gymById   = id => STATE.gyms.find(g => g.id === id);
 const teamLabel = t  => `${t.grade} Grade ${t.gender} ${t.name}`;
 const isEditor  = () => pb.authStore.isValid;
+
+// Pick a readable text color (white or near-black) for any team color.
+// Uses a perceptual luminance threshold so pale colors get dark text.
+function textColorFor(bgHex) {
+  const h = String(bgHex || "").replace("#","");
+  if (h.length !== 6) return "#ffffff";
+  const r = parseInt(h.slice(0,2), 16);
+  const g = parseInt(h.slice(2,4), 16);
+  const b = parseInt(h.slice(4,6), 16);
+  const lum = (0.299*r + 0.587*g + 0.114*b) / 255;
+  return lum > 0.62 ? "#1a1a1a" : "#ffffff";
+}
+function isLightColor(bgHex) { return textColorFor(bgHex) === "#1a1a1a"; }
 
 //============================================================
 // AUTH STATE → UI MODE
@@ -1027,8 +1116,9 @@ function renderPalette() {
     host.appendChild(h);
     for (const t of groups[k]) {
       const chip = document.createElement("div");
-      chip.className = "chip";
+      chip.className = "chip" + (isLightColor(t.color) ? " light" : "");
       chip.style.background = t.color;
+      chip.style.color = textColorFor(t.color);
       chip.draggable = editor;
       if (editor) {
         chip.addEventListener("dragstart", e => dragStartTeam(e, t.id));
@@ -1174,9 +1264,14 @@ function renderSchedule() {
 
 function renderPracticeBlock(p, isConflict, editor, lane, sharing) {
   const t = teamById(p.teamId);
+  const color = t ? t.color : "#666";
   const div = document.createElement("div");
-  div.className = "practice-block" + (isConflict ? " conflict" : "") + (sharing ? " shared" : "");
-  div.style.background = t ? t.color : "#666";
+  div.className = "practice-block"
+    + (isConflict ? " conflict" : "")
+    + (sharing ? " shared" : "")
+    + (isLightColor(color) ? " light" : "");
+  div.style.background = color;
+  div.style.color = textColorFor(color);
   div.style.top    = ((p.startMin - START_MIN) / SLOT_MIN * SLOT_PX) + "px";
   div.style.height = (p.durationMin / SLOT_MIN * SLOT_PX) + "px";
   // Two-team sharing: lane 0 = left half, lane 1 = right half. Solo blocks
@@ -1304,6 +1399,20 @@ function computeConflicts(dk) {
       }
     }
   }
+
+  // Same team scheduled twice on the same day → conflict
+  // (one team rarely needs two practices in the same evening; usually a slip-up)
+  const byTeam = {};
+  for (const p of STATE.practices) {
+    if (p.date !== dk) continue;
+    (byTeam[p.teamId] = byTeam[p.teamId] || []).push(p);
+  }
+  for (const tid in byTeam) {
+    if (byTeam[tid].length > 1) {
+      for (const p of byTeam[tid]) conflict.add(p.id);
+    }
+  }
+
   return conflict;
 }
 
@@ -1654,7 +1763,7 @@ function openTeamModal(teamId) {
   const gradeOpts  = GRADES.map(g => `<option ${g===grade?"selected":""}>${g}</option>`).join("");
   const genderOpts = GENDERS.map(g => `<option ${g===gender?"selected":""}>${g}</option>`).join("");
   const swatches = COLORS.map(c =>
-    `<div class="swatch ${c===color?"selected":""}" data-color="${c}" style="background:${c}" onclick="selectSwatch(this)"></div>`).join("");
+    `<div class="swatch ${c.toLowerCase()===color.toLowerCase()?"selected":""}" data-color="${c}" style="background:${c}" onclick="selectSwatch(this)"></div>`).join("");
   showModal(`
     <div class="modal">
       <h2>${t ? "Edit team" : "Add team"}</h2>
@@ -1664,7 +1773,13 @@ function openTeamModal(teamId) {
         <div class="row"><label>Team name (e.g. Navy, Gold, Varsity)</label>
           <input id="tm-name" value="${escapeAttr(name)}" placeholder="Navy"></div>
         <div class="row"><label>Color</label>
-          <div class="color-grid" id="tm-colors">${swatches}</div></div>
+          <div class="color-grid" id="tm-colors">${swatches}</div>
+          <div class="custom-color-row">
+            <label for="tm-custom-color">Or pick any color:</label>
+            <input type="color" id="tm-custom-color" value="${color}" oninput="onCustomColorInput(this)">
+            <span class="hex-display" id="tm-hex-display">${escapeHtml(color)}</span>
+          </div>
+        </div>
       </div>
       <div class="footer">
         <button onclick="closeModal()">Cancel</button>
@@ -1676,14 +1791,32 @@ function openTeamModal(teamId) {
 function selectSwatch(el) {
   el.parentElement.querySelectorAll(".swatch").forEach(s => s.classList.remove("selected"));
   el.classList.add("selected");
+  // Sync the custom color picker so the user can fine-tune from this base color
+  const cc = document.getElementById("tm-custom-color");
+  const hd = document.getElementById("tm-hex-display");
+  if (cc) cc.value = el.dataset.color;
+  if (hd) hd.textContent = el.dataset.color;
+}
+function onCustomColorInput(el) {
+  // The custom picker is the source of truth — deselect any swatch unless
+  // the chosen color happens to exactly match one.
+  document.querySelectorAll("#tm-colors .swatch").forEach(s => s.classList.remove("selected"));
+  const v = el.value.toLowerCase();
+  const match = document.querySelector(`#tm-colors .swatch[data-color="${v}"]`)
+             || Array.from(document.querySelectorAll("#tm-colors .swatch"))
+                  .find(s => s.dataset.color.toLowerCase() === v);
+  if (match) match.classList.add("selected");
+  const hd = document.getElementById("tm-hex-display");
+  if (hd) hd.textContent = el.value;
 }
 function saveTeam(teamId) {
   if (!isEditor()) return;
   const grade  = document.getElementById("tm-grade").value;
   const gender = document.getElementById("tm-gender").value;
   const name   = document.getElementById("tm-name").value.trim();
-  const colorEl= document.querySelector("#tm-colors .swatch.selected");
-  const color  = colorEl ? colorEl.dataset.color : COLORS[0];
+  // The custom color picker is always the source of truth — clicking a
+  // swatch updates it, and direct picker use overrides any swatch selection.
+  const color  = document.getElementById("tm-custom-color").value || COLORS[0];
   if (!name) { alert("Team name is required."); return; }
   mutate(() => {
     if (teamId) Object.assign(teamById(teamId), { grade, gender, name, color });
@@ -1799,11 +1932,21 @@ function renderTeamSummary() {
   const weekKeys = [];
   for (const day of WEEKDAYS) weekKeys.push(dateKey(addDays(currentMonday, day.offset)));
 
+  const SHORT_DAY = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  function fmtPracticeWhen(p) {
+    const d = new Date(p.date + "T00:00:00");
+    return SHORT_DAY[d.getDay()] + " " +
+      fmtTime(p.startMin) + "–" + fmtTime(p.startMin + p.durationMin);
+  }
+
   // Per-team stats for this week
   const stats = STATE.teams.map(t => {
-    const tp = STATE.practices.filter(p => p.teamId === t.id && weekKeys.includes(p.date));
+    const tp = STATE.practices
+      .filter(p => p.teamId === t.id && weekKeys.includes(p.date))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.startMin - b.startMin);
     const totalMin = tp.reduce((s, p) => s + (p.durationMin || 0), 0);
-    return { team: t, count: tp.length, totalMin };
+    const times = tp.map(fmtPracticeWhen).join(", ");
+    return { team: t, count: tp.length, totalMin, times };
   });
 
   // Group by Grade/Gender in palette order so the table mirrors the sidebar
@@ -1827,7 +1970,7 @@ function renderTeamSummary() {
 
   let rows = "";
   for (const grp of groupOrder) {
-    rows += `<tr class="group-row"><td colspan="3">${escapeHtml(grp.name)}</td></tr>`;
+    rows += `<tr class="group-row"><td colspan="4">${escapeHtml(grp.name)}</td></tr>`;
     for (const s of grp.items) {
       const hours = (s.totalMin / 60).toFixed(1);
       const isEmpty = s.count === 0;
@@ -1838,6 +1981,7 @@ function renderTeamSummary() {
         </div></td>
         <td class="num ${isEmpty?'none':''}">${isEmpty ? "—" : s.count}</td>
         <td class="num ${isEmpty?'none':''}">${isEmpty ? "—" : hours + " h"}</td>
+        <td class="times-cell ${isEmpty?'none':''}">${isEmpty ? "—" : escapeHtml(s.times)}</td>
       </tr>`;
     }
   }
@@ -1862,6 +2006,7 @@ function renderTeamSummary() {
           <th>Team</th>
           <th class="num">Practices</th>
           <th class="num">Total time</th>
+          <th>When</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
