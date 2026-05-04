@@ -651,10 +651,17 @@
 //============================================================
 // CONFIG
 //============================================================
-const APP_VERSION = "0.3.6";
+const APP_VERSION = "0.3.7";
 console.log("[scheduler] app version", APP_VERSION);
 const DEBUG_SYNC = true;  // toggle off later
-const DAY_NAMES = ["Mon","Tue","Wed","Thu","Fri"];
+// Weekdays SYBA actually practices on. Offset is days from Monday (0=Mon..4=Fri).
+// To re-enable Wednesday or any other day, add it back to this list.
+const WEEKDAYS = [
+  { name: "Mon", offset: 0 },
+  { name: "Tue", offset: 1 },
+  { name: "Thu", offset: 3 },
+  { name: "Fri", offset: 4 }
+];
 const START_MIN = 17 * 60;     // 5:00 PM
 const END_MIN   = 21 * 60;     // 9:00 PM
 const SLOT_MIN  = 30;          // visual cell height (one row of the grid)
@@ -1085,12 +1092,12 @@ function renderSchedule() {
   const headerRow1 = el("div","header-row");
   headerRow1.appendChild(el("div","corner"));
   const today = new Date();
-  for (let d=0; d<5; d++) {
-    const date = addDays(currentMonday, d);
+  for (const day of WEEKDAYS) {
+    const date = addDays(currentMonday, day.offset);
     const isToday = isSameDate(date, today);
     const dayGroup = el("div","day-group" + (isToday?" day-today":""));
     dayGroup.style.width = (STATE.gyms.length * parseInt(getCss("--gym-col"))) + "px";
-    dayGroup.appendChild(el("div","day-title", `${DAY_NAMES[d]} · ${fmtMonthDay(date)}`));
+    dayGroup.appendChild(el("div","day-title", `${day.name} · ${fmtMonthDay(date)}`));
     const gymHeaders = el("div","gym-headers");
     for (const g of STATE.gyms) {
       gymHeaders.appendChild(el("div","gym-header", g.name));
@@ -1109,17 +1116,17 @@ function renderSchedule() {
   bodyRow.appendChild(timeCol);
 
   const conflictIds = new Set();
-  for (let d=0; d<5; d++) {
-    const dk = dateKey(addDays(currentMonday, d));
+  for (const day of WEEKDAYS) {
+    const dk = dateKey(addDays(currentMonday, day.offset));
     computeConflicts(dk).forEach(id => conflictIds.add(id));
   }
 
   const editor = isEditor();
-  for (let d=0; d<5; d++) {
-    const date = addDays(currentMonday, d);
+  for (const day of WEEKDAYS) {
+    const date = addDays(currentMonday, day.offset);
     const dk   = dateKey(date);
     const dayStrip = el("div","day-strip");
-    dayStrip.dataset.day = d;
+    dayStrip.dataset.day = day.offset;
 
     for (const g of STATE.gyms) {
       const gymStrip = el("div","gym-strip");
@@ -1422,7 +1429,7 @@ function goToday() { currentMonday = mondayOf(new Date()); render(); }
 function copyWeekToNext() {
   if (!isEditor()) return;
   const startKeys = [];
-  for (let i=0;i<5;i++) startKeys.push(dateKey(addDays(currentMonday, i)));
+  for (const day of WEEKDAYS) startKeys.push(dateKey(addDays(currentMonday, day.offset)));
   const sP = STATE.practices.filter(p => startKeys.includes(p.date));
   const sB = STATE.blackouts.filter(b => startKeys.includes(b.date));
   if (!sP.length && !sB.length) { alert("Nothing to copy in this week."); return; }
@@ -1442,7 +1449,7 @@ function clearWeek() {
   if (!isEditor()) return;
   if (!confirm("Delete all practices and blackouts in this week?")) return;
   const keys = [];
-  for (let i=0;i<5;i++) keys.push(dateKey(addDays(currentMonday, i)));
+  for (const day of WEEKDAYS) keys.push(dateKey(addDays(currentMonday, day.offset)));
   mutate(() => {
     STATE.practices = STATE.practices.filter(p => !keys.includes(p.date));
     STATE.blackouts = STATE.blackouts.filter(b => !keys.includes(b.date));
@@ -1693,7 +1700,7 @@ function renderTeamSummary() {
 
   // Practices on this calendar week (Mon..Fri)
   const weekKeys = [];
-  for (let i=0; i<5; i++) weekKeys.push(dateKey(addDays(currentMonday, i)));
+  for (const day of WEEKDAYS) weekKeys.push(dateKey(addDays(currentMonday, day.offset)));
 
   // Per-team stats for this week
   const stats = STATE.teams.map(t => {

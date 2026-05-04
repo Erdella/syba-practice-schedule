@@ -321,8 +321,14 @@
 //============================================================
 // CONFIG
 //============================================================
-const APP_VERSION = "0.3.6";
-const DAY_NAMES_LONG = ["Monday","Tuesday","Wednesday","Thursday","Friday"];
+const APP_VERSION = "0.3.7";
+// Weekdays SYBA actually practices on. Keep in sync with the editor's index.html.
+const WEEKDAYS = [
+  { name: "Mon", offset: 0 },
+  { name: "Tue", offset: 1 },
+  { name: "Thu", offset: 3 },
+  { name: "Fri", offset: 4 }
+];
 const GRADES  = ["3rd","4th","5th","6th","7th","8th"];
 const GENDERS = ["Boys","Girls"];
 
@@ -511,8 +517,8 @@ function render() {
   const filteredTeam = teamFilter ? teamById(teamFilter) : null;
   let totalShown = 0;
 
-  for (let d = 0; d < 5; d++) {
-    const date = addDays(currentMonday, d);
+  for (const day of WEEKDAYS) {
+    const date = addDays(currentMonday, day.offset);
     const dk   = dateKey(date);
     const isToday = isSameDate(date, today);
 
