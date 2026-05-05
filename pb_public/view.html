@@ -126,6 +126,112 @@
     min-height: 38px;
   }
 
+  /* ============== Multi-team picker ============== */
+  .team-picker-wrap {
+    position: relative;
+    flex: 1;
+    max-width: 360px;
+  }
+  .team-picker-trigger {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    background: white;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+  }
+  .team-picker-trigger:hover { border-color: var(--accent); }
+  .team-picker-trigger .picker-label {
+    flex: 1;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .team-picker-trigger .picker-label.empty { color: var(--muted); }
+  .team-picker-trigger .picker-arrow { color: var(--muted); font-size: 11px; }
+
+  .team-picker-panel {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.12);
+    max-height: 60vh;
+    overflow-y: auto;
+    z-index: 30;
+    padding: 8px;
+  }
+  .team-picker-panel.open { display: block; }
+  .team-picker-actions {
+    display: flex;
+    gap: 6px;
+    padding: 6px 4px 8px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 6px;
+    align-items: center;
+  }
+  .team-picker-actions .small-btn {
+    padding: 4px 10px;
+    font-size: 12px;
+    border: 1px solid var(--accent);
+    background: white;
+    color: var(--accent);
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .team-picker-actions .small-btn:hover { background: var(--accent); color: white; }
+  .team-picker-actions .small-btn.done {
+    background: var(--accent);
+    color: white;
+    margin-left: auto;
+  }
+  .team-picker-actions .small-btn.done:hover { background: var(--accent-2); }
+  .team-picker-group {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--muted);
+    font-weight: 700;
+    margin: 8px 4px 4px;
+  }
+  .team-picker-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 8px;
+    cursor: pointer;
+    border-radius: 4px;
+    user-select: none;
+  }
+  .team-picker-item:hover { background: var(--bg); }
+  .team-picker-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+    accent-color: var(--accent);
+  }
+  .team-picker-item .swatch-dot {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.1);
+  }
+  .team-picker-item .name { flex: 1; font-size: 14px; }
+
   /* ============== Schedule list ============== */
   main {
     max-width: 740px;
@@ -297,11 +403,23 @@
     <button class="today" onclick="goToday()">Today</button>
   </div>
   <div class="filter-row">
-    <label for="team-filter">Team:</label>
-    <select id="team-filter" onchange="setFilter(this.value)">
-      <option value="" disabled selected>— Pick your team —</option>
-      <option value="__all__">Show all teams</option>
-    </select>
+    <label>Teams:</label>
+    <div class="team-picker-wrap">
+      <button class="team-picker-trigger" id="team-picker-trigger"
+              onclick="toggleTeamPicker(event)" type="button"
+              aria-haspopup="listbox" aria-expanded="false">
+        <span class="picker-label empty" id="team-picker-label">— Pick your team(s) —</span>
+        <span class="picker-arrow">▾</span>
+      </button>
+      <div class="team-picker-panel" id="team-picker-panel">
+        <div class="team-picker-actions">
+          <button class="small-btn" onclick="selectAllTeams()" type="button">Select all</button>
+          <button class="small-btn" onclick="clearAllTeams()" type="button">Clear</button>
+          <button class="small-btn done" onclick="closeTeamPicker()" type="button">Done</button>
+        </div>
+        <div id="team-picker-list"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -322,7 +440,7 @@
 //============================================================
 // CONFIG
 //============================================================
-const APP_VERSION = "0.3.11";
+const APP_VERSION = "0.3.12";
 // Weekdays SYBA actually practices on. Keep in sync with the editor's index.html.
 const WEEKDAYS = [
   { name: "Mon", offset: 0 },
@@ -345,11 +463,28 @@ pb.autoCancellation(false);
 let STATE = { teams: [], gyms: [], practices: [], blackouts: [] };
 let scheduleId = null;
 let currentMonday = mondayOf(new Date());
-let teamFilter = "";
+// Multi-select: Set of team IDs the parent has chosen to view.
+// Empty set = nothing picked yet → render() shows the prompt.
+let selectedTeams = new Set();
+// Pending = "show all" if URL says so but STATE hasn't loaded yet.
+// Once teams arrive, this is expanded to "every team in STATE.teams".
+let pendingShowAll = false;
 
-// Read team filter from URL ?team=...
+// Read selection from URL.
+//   ?teams=t_1,t_3   → multi-team
+//   ?team=t_3        → single team (back-compat with v0.3.11)
+//   ?team=__all__    → show all (back-compat)
+//   ?teams=__all__   → show all
 const urlParams = new URLSearchParams(window.location.search);
-if (urlParams.has("team")) teamFilter = urlParams.get("team");
+if (urlParams.has("teams")) {
+  const v = urlParams.get("teams");
+  if (v === "__all__") pendingShowAll = true;
+  else for (const id of v.split(",")) { const tid = id.trim(); if (tid) selectedTeams.add(tid); }
+} else if (urlParams.has("team")) {
+  const v = urlParams.get("team");
+  if (v === "__all__") pendingShowAll = true;
+  else if (v) selectedTeams.add(v);
+}
 
 //============================================================
 // DATE HELPERS
@@ -416,7 +551,13 @@ async function loadSchedule() {
     const rec = records[0];
     scheduleId = rec.id;
     STATE = sanitize(rec.data);
-    populateTeamFilter();
+    applyPendingShowAll();
+    // Drop any URL-provided IDs that no longer exist (deleted teams)
+    for (const id of Array.from(selectedTeams)) {
+      if (!teamById(id)) selectedTeams.delete(id);
+    }
+    updateTeamPickerLabel();
+    populateTeamPicker();
     render();
     subscribeToUpdates();
   } catch (err) {
@@ -445,7 +586,13 @@ function subscribeToUpdates() {
     .subscribe(scheduleId, (e) => {
       if (e.action === "update") {
         STATE = sanitize(e.record.data);
-        populateTeamFilter();
+        applyPendingShowAll();
+        // Drop any selected IDs that no longer exist (deleted teams)
+        for (const id of Array.from(selectedTeams)) {
+          if (!teamById(id)) selectedTeams.delete(id);
+        }
+        updateTeamPickerLabel();
+        populateTeamPicker();
         render();
         flashUpdate();
       }
@@ -459,11 +606,48 @@ function flashUpdate() {
 }
 
 //============================================================
-// FILTER + TEAMS
+// MULTI-TEAM PICKER
 //============================================================
-function populateTeamFilter() {
-  const sel = document.getElementById("team-filter");
-  // Group by Grade + Gender, ordered like the editor
+function applyPendingShowAll() {
+  if (pendingShowAll && STATE.teams.length) {
+    selectedTeams = new Set(STATE.teams.map(t => t.id));
+    pendingShowAll = false;
+  }
+}
+function isShowingAll() {
+  return STATE.teams.length > 0 && selectedTeams.size === STATE.teams.length;
+}
+
+function updateTeamPickerLabel() {
+  const lbl = document.getElementById("team-picker-label");
+  if (!lbl) return;
+  if (selectedTeams.size === 0) {
+    lbl.textContent = "— Pick your team(s) —";
+    lbl.classList.add("empty");
+  } else if (isShowingAll()) {
+    lbl.textContent = "All teams";
+    lbl.classList.remove("empty");
+  } else if (selectedTeams.size === 1) {
+    const t = teamById(Array.from(selectedTeams)[0]);
+    lbl.textContent = t ? teamLabel(t) : "1 team";
+    lbl.classList.remove("empty");
+  } else if (selectedTeams.size <= 3) {
+    const names = Array.from(selectedTeams)
+      .map(id => teamById(id))
+      .filter(Boolean)
+      .map(t => `${t.grade} ${t.gender} ${t.name}`)
+      .join(", ");
+    lbl.textContent = names || `${selectedTeams.size} teams`;
+    lbl.classList.remove("empty");
+  } else {
+    lbl.textContent = `${selectedTeams.size} teams selected`;
+    lbl.classList.remove("empty");
+  }
+}
+
+function populateTeamPicker() {
+  const host = document.getElementById("team-picker-list");
+  if (!host) return;
   const groups = {};
   for (const t of STATE.teams) {
     const k = `${t.grade} Grade ${t.gender}`;
@@ -474,28 +658,74 @@ function populateTeamFilter() {
     const k = `${g} Grade ${sx}`;
     if (groups[k]) orderedKeys.push(k);
   }
-  // Default option: empty string = "no team picked" → render() shows a prompt.
-  let html = `<option value="" ${teamFilter === "" ? "selected" : ""} disabled>— Pick your team —</option>`;
-  html += `<option value="__all__" ${teamFilter === "__all__" ? "selected" : ""}>Show all teams</option>`;
+  let html = "";
   for (const k of orderedKeys) {
-    html += `<optgroup label="${escapeHtml(k)}">`;
+    html += `<div class="team-picker-group">${escapeHtml(k)}</div>`;
     for (const t of groups[k]) {
-      const isSel = teamFilter === t.id ? " selected" : "";
-      html += `<option value="${escapeHtml(t.id)}"${isSel}>${escapeHtml(teamLabel(t))}</option>`;
+      const checked = selectedTeams.has(t.id) ? "checked" : "";
+      html += `<label class="team-picker-item">
+        <input type="checkbox" ${checked} onchange="toggleTeam('${escapeHtml(t.id)}')">
+        <span class="swatch-dot" style="background:${escapeHtml(t.color)}"></span>
+        <span class="name">${escapeHtml(teamLabel(t))}</span>
+      </label>`;
     }
-    html += `</optgroup>`;
   }
-  sel.innerHTML = html;
+  host.innerHTML = html;
 }
-function setFilter(v) {
-  teamFilter = v || "";
-  // Reflect in URL so it's shareable / bookmarkable
+
+function toggleTeamPicker(e) {
+  if (e) e.stopPropagation();
+  const panel = document.getElementById("team-picker-panel");
+  const trigger = document.getElementById("team-picker-trigger");
+  const wasOpen = panel.classList.contains("open");
+  panel.classList.toggle("open");
+  trigger.setAttribute("aria-expanded", String(!wasOpen));
+  if (!wasOpen) populateTeamPicker();
+}
+function closeTeamPicker() {
+  document.getElementById("team-picker-panel").classList.remove("open");
+  document.getElementById("team-picker-trigger").setAttribute("aria-expanded", "false");
+}
+
+function toggleTeam(id) {
+  if (selectedTeams.has(id)) selectedTeams.delete(id);
+  else selectedTeams.add(id);
+  onSelectionChanged();
+}
+function selectAllTeams() {
+  selectedTeams = new Set(STATE.teams.map(t => t.id));
+  onSelectionChanged();
+}
+function clearAllTeams() {
+  selectedTeams.clear();
+  onSelectionChanged();
+}
+
+function onSelectionChanged() {
+  // Sync URL: ?teams=t_1,t_3 (or omit when empty/all-cleared).
   const url = new URL(window.location.href);
-  if (teamFilter) url.searchParams.set("team", teamFilter);
-  else url.searchParams.delete("team");
+  url.searchParams.delete("team"); // legacy single-team param
+  if (selectedTeams.size === 0) {
+    url.searchParams.delete("teams");
+  } else if (isShowingAll()) {
+    url.searchParams.set("teams", "__all__");
+  } else {
+    url.searchParams.set("teams", Array.from(selectedTeams).join(","));
+  }
   window.history.replaceState({}, "", url);
+  updateTeamPickerLabel();
+  populateTeamPicker(); // refresh check states
   render();
 }
+
+// Close the picker when clicking anywhere outside it
+document.addEventListener("click", (e) => {
+  const panel = document.getElementById("team-picker-panel");
+  const trigger = document.getElementById("team-picker-trigger");
+  if (!panel || !panel.classList.contains("open")) return;
+  if (panel.contains(e.target) || trigger.contains(e.target)) return;
+  closeTeamPicker();
+});
 
 //============================================================
 // WEEK NAV
@@ -516,25 +746,25 @@ function render() {
   const main = document.getElementById("schedule-main");
   main.innerHTML = "";
 
-  // No team picked yet — show a friendly prompt and stop.
-  if (!teamFilter) {
+  // No teams picked yet — show a friendly prompt and stop.
+  if (selectedTeams.size === 0) {
     main.innerHTML = `
       <div style="text-align:center; padding:40px 20px; background:var(--panel);
                   border-radius:8px; box-shadow:0 1px 2px rgba(0,0,0,.05);">
         <div style="font-size:36px; margin-bottom:10px;">👆</div>
         <div style="font-weight:700; color:var(--accent); font-size:16px; margin-bottom:6px;">
-          Pick your team to see this week's schedule
+          Pick your team(s) to see this week's schedule
         </div>
         <div style="color:var(--muted); font-size:13px;">
-          Use the dropdown above. Choose <b>Show all teams</b> to see everyone's practices.
+          Tap the picker above. You can select multiple teams (e.g. siblings on different teams),
+          or use <b>Select all</b> to see everyone's practices.
         </div>
       </div>`;
     return;
   }
 
-  const showingAll = teamFilter === "__all__";
+  const showingAll = isShowingAll();
   const today = new Date();
-  const filteredTeam = (!showingAll && teamFilter) ? teamById(teamFilter) : null;
   let totalShown = 0;
 
   for (const day of WEEKDAYS) {
@@ -542,15 +772,13 @@ function render() {
     const dk   = dateKey(date);
     const isToday = isSameDate(date, today);
 
-    let practices = STATE.practices.filter(p => p.date === dk);
-    if (!showingAll) practices = practices.filter(p => p.teamId === teamFilter);
+    let practices = STATE.practices
+      .filter(p => p.date === dk && selectedTeams.has(p.teamId));
     practices.sort((a,b) => a.startMin - b.startMin || gymOrder(a.gymId) - gymOrder(b.gymId));
 
-    let blackouts = STATE.blackouts.filter(b => b.date === dk);
+    // Show blackouts only when viewing all teams (otherwise they're noise)
+    let blackouts = showingAll ? STATE.blackouts.filter(b => b.date === dk) : [];
     blackouts.sort((a,b) => a.startMin - b.startMin);
-
-    // Hide blackouts when filtering to a single team (irrelevant noise)
-    if (!showingAll) blackouts = [];
 
     const dayDiv = document.createElement("div");
     dayDiv.className = "day-section";
@@ -618,9 +846,16 @@ function render() {
     note.style.borderRadius = "8px";
     note.style.padding = "20px";
     note.style.marginTop = "8px";
-    note.textContent = filteredTeam
-      ? `No practices scheduled for ${teamLabel(filteredTeam)} this week.`
-      : "No practices or blackouts scheduled this week.";
+    if (showingAll) {
+      note.textContent = "No practices or blackouts scheduled this week.";
+    } else if (selectedTeams.size === 1) {
+      const t = teamById(Array.from(selectedTeams)[0]);
+      note.textContent = t
+        ? `No practices scheduled for ${teamLabel(t)} this week.`
+        : "No practices scheduled this week.";
+    } else {
+      note.textContent = `No practices scheduled for the selected ${selectedTeams.size} teams this week.`;
+    }
     main.appendChild(note);
   }
 }
